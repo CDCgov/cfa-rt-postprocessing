@@ -103,7 +103,7 @@ data excluded after manual review. Contains the fields:  `location` (renamed fro
 - `..._map_data.csv`, `...timeseries_data.csv` derived from merged_release. We
 need to keep producing these until we can make front end changes.
 
-![alt text](image.png)
+![DAG](mermaid-diagram-2024-10-205645.png)
 
 ## Project Admin
 
