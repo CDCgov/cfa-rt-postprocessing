@@ -103,7 +103,25 @@ data excluded after manual review. Contains the fields:  `location` (renamed fro
 - `..._map_data.csv`, `...timeseries_data.csv` derived from merged_release. We
 need to keep producing these until we can make front end changes.
 
-![DAG](mermaid-diagram-2024-10-205645.png)
+```mermaid
+flowchart TD
+  inputs[/inputs/];
+  internal{{"internal/"}};
+  external{{"release/"}};
+  plots{{"plots/"}};
+  merged["merged.csv (disease-specific)"];
+
+  inputs --> internal --> merged;
+  merged --> plots;
+  merged --> |select and filter| external --> merged_release.csv;
+  merged_release.csv --> |select and filter| m["...map_data.csv"];
+  merged_release.csv --> |select and filter| t["...timeseries_data.csv"];
+  m --> |release to| w((website));
+  t --> |release to| w((website));
+  merged_release.csv --> |release to| d[("production database (in blob storage)")];
+  d --> |release to| dcg((data.cdc.gov));
+  d --> |release to| dcp((DCIPHER state explorer));
+```
 
 ## Project Admin
 
