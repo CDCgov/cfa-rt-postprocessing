@@ -2,7 +2,7 @@ repos:
   #####
   # Basic file cleanliness
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v5.0.0
     hooks:
       - id: check-added-large-files
       - id: check-yaml
@@ -22,19 +22,23 @@ repos:
       - id: ruff
       # Run the formatter
       - id: ruff-format
-  #####
-  # Julia
-  # Due to lack of first-class Julia support, this needs Julia local install
-  #   and JuliaFormatter.jl installed in the library
-  # - repo: https://github.com/domluna/JuliaFormatter.jl
-  #   rev: v1.0.39
-  #   hooks:
-  #   - id: julia-formatter
+
   #####
   # Secrets
   - repo: https://github.com/Yelp/detect-secrets
-    rev: v1.4.0
+    rev: v1.5.0
     hooks:
       - id: detect-secrets
         args: ["--baseline", ".secrets.baseline"]
         exclude: package.lock.json
+
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit.com hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ""
+  autoupdate_commit_msg: "[pre-commit.ci] pre-commit autoupdate"
+  autoupdate_schedule: weekly
+  submodules: false
