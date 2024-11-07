@@ -1,7 +1,7 @@
 [project]
 name = "cfa-rt-postprocessing"
 version = "0.1.0"
-description = "Add your description here"
+description = "For postprocessing the output of the EpiNow2 Rt pipeline."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = []
