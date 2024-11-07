@@ -7,7 +7,11 @@ requires-python = ">=3.13"
 dependencies = []
 
 [dependency-groups]
-dev = [
-    "pre-commit>=4.0.1",
-    "pytest>=8.3.3",
-]
+dev = ["pre-commit>=4.0.1", "pytest>=8.3.3"]
+
+[tool.ruff]
+# This is the default in black.
+# [Their docs](https://black.readthedocs.io/en/stable/the_black_code_style/current_style.html#labels-line-length)
+# say "this number was found to produce significantly shorter files than
+# sticking with 80 (the most popular), or even 79 (used by the standard library)
+line-length = 88
