@@ -6,7 +6,7 @@ on:
     branches: [main]
 
 jobs:
-  uv-example:
+  build-and-test:
     name: python
     runs-on: ubuntu-latest
 
