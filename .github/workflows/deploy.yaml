@@ -1,0 +1,40 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+
+  build-and-deploy:
+    runs-on: cfa-cdcgov
+    environment: production
+    steps:
+    - name: Azure Service Principal CLI login
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Configure Docker
+      uses: docker/setup-buildx-action@v3
+
+    - name: Azure ACR login
+      uses: azure/docker-login@v2
+      with:
+        login-server: cfaprdconfigvalidation.azurecr.io
+        username: ${{ secrets.AZURE_CLIENT_ID }}
+        password: ${{ secrets.AZURE_CLIENT_SECRET }}
+
+    - name: Build and push
+      uses: docker/build-push-action@v6
+      with:
+        push: true
+        tags: cfaprdconfigvalidation.azurecr.io/config-validation-service:${{ github.sha }}
+
+    - name: Build and deploy Container App
+      uses: azure/container-apps-deploy-action@v1
+      with:
+        acrName: cfaprdconfigvalidation
+        containerAppName: configvalidation
+        resourceGroup: EXT-EDAV-CFA-PRD
+        imageToDeploy: cfaprdconfigvalidation.azurecr.io/config-validation-service:${{ github.sha }}
