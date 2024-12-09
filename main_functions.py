@@ -81,7 +81,8 @@ def merge_task_files(
         # Download the samples files
         local_sample_files: list[str] = []
         for sf in tqdm(
-            prod_runs.get_column("samples_path"), desc="Downloading samples"
+            prod_runs.get_column("samples_path"),
+            desc="Downloading samples",
         ):
             lsf = os.path.join(tempdir, sf)
             local_sample_files.append(lsf)
@@ -100,7 +101,8 @@ def merge_task_files(
         # Download the summary files
         local_summary_files: list[str] = []
         for sf in tqdm(
-            prod_runs.get_column("summaries_paths"), desc="Downloading summaries"
+            prod_runs.get_column("summaries_paths"),
+            desc="Downloading summaries",
         ):
             lsf = os.path.join(tempdir, sf)
             local_summary_files.append(lsf)
