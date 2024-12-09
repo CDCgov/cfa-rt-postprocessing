@@ -1,11 +1,12 @@
-from dataclasses import dataclass
-from datetime import date, datetime
 import os
 import tempfile
+from dataclasses import dataclass
+from datetime import date, datetime
+
+import polars as pl
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 from azure.storage.blob._container_client import ContainerClient
-import polars as pl
 from tqdm import tqdm
 
 
@@ -43,8 +44,11 @@ def merge_task_files(
     bsc: BlobServiceClient = instantiate_blob_service_client(
         DefaultAzureCredential(), AzureStorage.AZURE_STORAGE_ACCOUNT_URL
     )
-    container_client: ContainerClient = bsc.get_container_client(
+    input_ctr_client: ContainerClient = bsc.get_container_client(
         rt_output_container_name
+    )
+    output_ctr_client: ContainerClient = bsc.get_container_client(
+        post_process_container_name
     )
 
     # === Find and download all of the metadata files ==================================
@@ -52,14 +56,14 @@ def merge_task_files(
     # `min_runat`. Can revisit this datetime cutoff if needed
     metadata_files: list[str] = [
         b.name
-        for b in container_client.list_blobs()
+        for b in input_ctr_client.list_blobs()
         if b.name.endswith("metadata.json") and (b.creation_time >= min_runat)
     ]
     # Download the metadata files into a tempdir
     with tempfile.TemporaryDirectory() as tempdir:
         for mf in tqdm(metadata_files, desc="Downloading metadata files"):
             with open(os.path.join(tempdir, mf), "wb") as f:
-                f.write(container_client.download_blob(mf).readall())
+                f.write(input_ctr_client.download_blob(mf).readall())
 
         # === Using the metadata files, get the tasks we want to merge =================
         prod_runs: pl.DataFrame = (
@@ -82,8 +86,10 @@ def merge_task_files(
             lsf = os.path.join(tempdir, sf)
             local_sample_files.append(lsf)
             with open(lsf, "wb") as f:
-                f.write(container_client.download_blob(sf).readall())
+                f.write(input_ctr_client.download_blob(sf).readall())
 
+        # Sort for nicer sorting in the final parquet
+        local_sample_files.sort()
         # Merge the files
         final_samples = os.path.join(tempdir, "samples.parquet")
         pl.scan_parquet(local_sample_files).sort(["geo_value", "disease"]).sink_parquet(
@@ -99,15 +105,29 @@ def merge_task_files(
             lsf = os.path.join(tempdir, sf)
             local_summary_files.append(lsf)
             with open(lsf, "wb") as f:
-                f.write(container_client.download_blob(sf).readall())
+                f.write(input_ctr_client.download_blob(sf).readall())
 
+        # Sort for nicer sorting in the final parquet
+        local_summary_files.sort()
         # Merge the files
         final_summaries = os.path.join(tempdir, "summaries.parquet")
-        pl.scan_parquet(local_sample_files).sort(["geo_value", "disease"]).sink_parquet(
-            final_summaries, statistics="full"
-        )
+        pl.scan_parquet(local_summary_files).sort(
+            ["geo_value", "disease"]
+        ).sink_parquet(final_summaries, statistics="full")
 
-    # === Upload the merged files to the post-process container ========================
+        # === Upload the merged files to the post-process container ========================
+        # Not yet sure if this is really what we want.
+        blob_path_summary_file = os.path.join(
+            os.path.commonprefix(local_summary_files), "summaries.parquet"
+        )
+        with open(final_summaries, "rb") as data:
+            output_ctr_client.upload_blob(name=blob_path_summary_file, data=data)
+
+        blob_path_samples_file = os.path.join(
+            os.path.commonprefix(local_sample_files), "samples.parquet"
+        )
+        with open(final_samples, "rb") as data:
+            output_ctr_client.upload_blob(name=blob_path_samples_file, data=data)
 
 
 @dataclass
