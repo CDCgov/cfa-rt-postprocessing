@@ -1,16 +1,21 @@
 import os
-import tempfile
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
+from pathlib import Path
 
 import polars as pl
+import duckdb
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 from azure.storage.blob._container_client import ContainerClient
-from tqdm import tqdm
+from rich.console import Console
+from rich.progress import track
+
+console = Console()
 
 
 def merge_task_files(
+    release_name: str,
     min_runat: datetime,
     max_runat: datetime,
     prod_date: date | None,
@@ -22,8 +27,38 @@ def merge_task_files(
     If a production date is provided, only files with the specified production date are
     included.
 
+    Sets up the desired folder structure
+    ├── <release_name>/          # E.g. "20241009"
+    │   ├── internal-review/
+    |   |   ├── job_<jobid>/     # Jobs are disease-specific in production
+    |   |   |   ├── merged.csv
+    |   |   |   ├── plots/
+    |   |   |   |   ├── choropleth.png
+    |   |   |   |   ├── lineinterval.png
+    |   |   |   |   ├── timeseries/
+    |   |   |   |   |   ├── <location>.png
+    |   |   |   |   |   ├── <location>.png
+    |   |   |   |   ├── ...
+    |   |   ├── job_<jobid>/
+    |   |   |   ├── merged.csv
+    |   |   |   ├── plots/
+    |   |   |   |   ├── choropleth.png
+    |   |   |   |   ├── lineinterval.png
+    |   |   |   |   ├── timeseries/
+    |   |   |   |   |   ├── <location>.png
+    |   |   |   |   |   ├── <location>.png
+    |   |   |   |   |   ├── ...
+    |   ├── release/
+    |   |   ├── merged_release.csv
+    |   |   ├── <rundate>_<disease1>_map_data.csv
+    |   |   ├── <rundate>_<disease2>_map_data.csv
+    |   |   ├── <rundate>_<disease1>_timeseries_data.csv
+    |   |   ├── <rundate>_<disease2>_timeseries_data.csv
+
     Parameters
     ----------
+    release_name : str
+        The name of the release. E.g. "2024-12-12"
     min_runat : datetime
         The minimum run_at time to include.
     max_runat : datetime
@@ -40,9 +75,22 @@ def merge_task_files(
     None
         This function does not return any value.
     """
+    # === Set up the desired folder structure ==========================================
+    # This function will run inside an Azure Function, and be given a fresh file system
+    # each time it runs.
+    console.status("Setting up the desired folder structure")
+    root = Path(".") / release_name
+    internal_review = root / "internal-review"
+    meta = internal_review / "meta"
+    release = root / "release"
+    for d in [root, internal_review, release, meta]:
+        d.mkdir(parents=True, exist_ok=True)
+
     # === Set up blob service clients ==================================================
-    bsc: BlobServiceClient = instantiate_blob_service_client(
-        DefaultAzureCredential(), AzureStorage.AZURE_STORAGE_ACCOUNT_URL
+    console.status("Setting up blob service clients")
+    bsc = BlobServiceClient(
+        AzureStorage.AZURE_STORAGE_ACCOUNT_URL,
+        credential=DefaultAzureCredential(),
     )
     input_ctr_client: ContainerClient = bsc.get_container_client(
         rt_output_container_name
@@ -54,82 +102,90 @@ def merge_task_files(
     # === Find and download all of the metadata files ==================================
     # Get a list of the metadata files, just the ones that were created at or after
     # `min_runat`. Can revisit this datetime cutoff if needed
-    metadata_files: list[str] = [
-        b.name
-        for b in input_ctr_client.list_blobs()
-        if b.name.endswith("metadata.json") and (b.creation_time >= min_runat)
-    ]
-    # Download the metadata files into a tempdir
-    with tempfile.TemporaryDirectory() as tempdir:
-        for mf in tqdm(metadata_files, desc="Downloading metadata files"):
-            with open(os.path.join(tempdir, mf), "wb") as f:
-                f.write(input_ctr_client.download_blob(mf).readall())
+    # console.status("Finding metadata files")
+    # metadata_files: list[str] = [
+    #     b.name
+    #     for b in input_ctr_client.list_blobs()
+    #     if b.name.endswith("metadata.json")
+    #     and (b.creation_time >= min_runat)
+    #     and (b.creation_time <= max_runat)
+    # ]
+    # # Download the metadata files into the internal-review folder
+    # for mf in track(metadata_files, description="Downloading metadata files"):
+    #     to_write = meta / mf
+    #     to_write.parent.mkdir(parents=True, exist_ok=True)
+    #     with open(to_write, "wb") as f:
+    #         f.write(input_ctr_client.download_blob(mf).readall())
 
-        # === Using the metadata files, get the tasks we want to merge =================
-        prod_runs: pl.DataFrame = (
-            # FInd all the metadata files
-            pl.scan_ndjson(os.path.join(tempdir, "**", "*.metadata.json"))
-            # Filter by the run at times
-            .filter(pl.col.run_at.is_between(min_runat, max_runat, closed="both"))
-            .sort("run_at")
-            # Keep just the most recently run tasks
-            .unique(subset=["disease", "geo_value", "production_date"], keep="last")
-            .collect()
-        )
+    # === Using the metadata files, get the tasks we want to merge =================
+    md_path = str(meta / "**/metadata.json")
+    # Use duckdb here bc polars apparen't can't read multiple json files unless they are
+    # ndjson, and these are not
+    conn = duckdb.connect()
+    prod_runs: pl.DataFrame = (
+        # Find all the metadata files
+        conn.sql(f"SELECT * FROM '{md_path}'")
+        .pl()
+        # Filter by the run at times
+        .filter(pl.col.run_at.is_between(min_runat, max_runat, closed="both"))
+        .sort("run_at")
+        # Keep just the most recently run tasks
+        .unique(subset=["disease", "geo_value", "production_date"], keep="last")
+    )
 
-        # === Merge the sample files ===================================================
-        # Download the samples files
-        local_sample_files: list[str] = []
-        for sf in tqdm(
-            prod_runs.get_column("samples_path"),
-            desc="Downloading samples",
-        ):
-            lsf = os.path.join(tempdir, sf)
-            local_sample_files.append(lsf)
-            with open(lsf, "wb") as f:
-                f.write(input_ctr_client.download_blob(sf).readall())
+    # === Merge the sample files ===================================================
+    # Download the samples files
+    local_sample_files: list[Path] = []
+    for sf in track(
+        prod_runs.get_column("samples_path"),
+        description="Downloading samples",
+    ):
+        lsf: Path = internal_review / sf
+        local_sample_files.append(lsf)
+        with lsf.open("wb") as f:
+            f.write(input_ctr_client.download_blob(sf).readall())
 
-        # Sort for nicer sorting in the final parquet
-        local_sample_files.sort()
-        # Merge the files
-        final_samples = os.path.join(tempdir, "samples.parquet")
-        pl.scan_parquet(local_sample_files).sort(["geo_value", "disease"]).sink_parquet(
-            final_samples, statistics="full"
-        )
+    # Sort for nicer sorting in the final parquet
+    local_sample_files.sort()
+    # Merge the files
+    final_samples = internal_review / "samples.parquet"
+    pl.scan_parquet(local_sample_files).sort(["geo_value", "disease"]).sink_parquet(
+        final_samples, statistics="full"
+    )
 
-        # === Merge the summary files ==================================================
-        # Download the summary files
-        local_summary_files: list[str] = []
-        for sf in tqdm(
-            prod_runs.get_column("summaries_paths"),
-            desc="Downloading summaries",
-        ):
-            lsf = os.path.join(tempdir, sf)
-            local_summary_files.append(lsf)
-            with open(lsf, "wb") as f:
-                f.write(input_ctr_client.download_blob(sf).readall())
+    # === Merge the summary files ==================================================
+    # Download the summary files
+    local_summary_files: list[str] = []
+    for sf in track(
+        prod_runs.get_column("summaries_paths"),
+        description="Downloading summaries",
+    ):
+        lsf: Path = internal_review / sf
+        local_summary_files.append(lsf)
+        with lsf.open("wb") as f:
+            f.write(input_ctr_client.download_blob(sf).readall())
 
-        # Sort for nicer sorting in the final parquet
-        local_summary_files.sort()
-        # Merge the files
-        final_summaries = os.path.join(tempdir, "summaries.parquet")
-        pl.scan_parquet(local_summary_files).sort(
-            ["geo_value", "disease"]
-        ).sink_parquet(final_summaries, statistics="full")
+    # Sort for nicer sorting in the final parquet
+    local_summary_files.sort()
+    # Merge the files
+    final_summaries = internal_review / "summaries.parquet"
+    pl.scan_parquet(local_summary_files).sort(["geo_value", "disease"]).sink_parquet(
+        final_summaries, statistics="full"
+    )
 
-        # === Upload the merged files to the post-process container ========================
-        # Not yet sure if this is really what we want.
-        blob_path_summary_file = os.path.join(
-            os.path.commonprefix(local_summary_files), "summaries.parquet"
-        )
-        with open(final_summaries, "rb") as data:
-            output_ctr_client.upload_blob(name=blob_path_summary_file, data=data)
+    # === Upload the merged files to the post-process container ========================
+    # Not yet sure if this is really what we want.
+    blob_path_summary_file = os.path.join(
+        os.path.commonprefix(local_summary_files), "summaries.parquet"
+    )
+    with open(final_summaries, "rb") as data:
+        output_ctr_client.upload_blob(name=blob_path_summary_file, data=data)
 
-        blob_path_samples_file = os.path.join(
-            os.path.commonprefix(local_sample_files), "samples.parquet"
-        )
-        with open(final_samples, "rb") as data:
-            output_ctr_client.upload_blob(name=blob_path_samples_file, data=data)
+    blob_path_samples_file = os.path.join(
+        os.path.commonprefix(local_sample_files), "samples.parquet"
+    )
+    with open(final_samples, "rb") as data:
+        output_ctr_client.upload_blob(name=blob_path_samples_file, data=data)
 
 
 @dataclass
@@ -143,34 +199,13 @@ class AzureStorage:
     SCOPE_URL: str = "https://cfaazurebatchprd.blob.core.windows.net/.default"
 
 
-def instantiate_blob_service_client(
-    sp_credential: DefaultAzureCredential, account_url: str
-) -> BlobServiceClient:
-    """Instantiate Blob Service Client
-
-    Function to instantiate blob service client to interact with Azure Blob Storage.
-
-    Parameters
-    ----------
-    sp_credential : DefaultAzureCredential
-        Service principal credential object for use in authenticating with Storage API.
-    account_url : str
-        URL of the storage account.
-
-    Returns
-    -------
-    BlobServiceClient
-        Azure Blob Storage client.
-
-    Raises
-    ------
-    ValueError
-        If sp_credential is invalid or BlobServiceClient fails to instantiate.
-    """
-
-    if not sp_credential:
-        raise ValueError("Service principal credential not provided.")
-
-    blob_service_client = BlobServiceClient(account_url, credential=sp_credential)
-
-    return blob_service_client
+if __name__ == "__main__":
+    # Note that the dates in blob storage are in UTC, so when looking for files, we need
+    # to use UTC times.
+    merge_task_files(
+        release_name="2024-12-12",
+        min_runat=datetime(2024, 12, 10, hour=21, minute=10, tzinfo=timezone.utc),
+        max_runat=datetime(2024, 12, 10, hour=22, minute=20, tzinfo=timezone.utc),
+        prod_date=date(2022, 1, 1),
+        rt_output_container_name="zs-test-pipeline-update",
+    )
