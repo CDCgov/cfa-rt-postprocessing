@@ -1,4 +1,3 @@
-import os
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -21,6 +20,7 @@ def merge_task_files(
     prod_date: date | None,
     rt_output_container_name: str = "nssp_rt",
     post_process_container_name: str = "nssp-rt-post-process",
+    overwrite_blobs: bool = False,
 ):
     """
     Merge multiple task sample and summary files within a specified time range.
@@ -69,6 +69,9 @@ def merge_task_files(
         The name of the Rt output container. Default is "nssp_rt".
     post_process_container_name : str, optional
         The name of the post-process container. Default is "nssp_rt_post_process".
+    overwrite_blobs : bool, optional
+        If True, overwrite the blobs in the post-process container. Default is
+        False.
 
     Returns
     -------
@@ -152,10 +155,22 @@ def merge_task_files(
 
     # Sort for nicer sorting in the final parquet
     local_sample_files.sort()
+
+    # Create a string of the file names readable by duckdb
+    lsf_str = ",".join("'" + str(p) + "'" for p in local_sample_files)
+
     # Merge the files
     final_samples = internal_review / "samples.parquet"
     console.log("Merging the sample files")
-    pl.scan_parquet(local_sample_files).sink_parquet(final_samples, statistics="full")
+    console.log(local_sample_files)
+
+    # Merge the files with duckdb for better RAM usage
+    conn.sql(f"""
+    CREATE VIEW samples AS FROM
+    read_parquet([{lsf_str}]);
+
+    COPY samples TO '{str(final_samples)}' (CODEC 'zstd');
+    """)
 
     # === Merge the summary files ==================================================
     # Download the summary files
@@ -172,28 +187,53 @@ def merge_task_files(
 
     # Sort for nicer sorting in the final parquet
     local_summary_files.sort()
-    # Merge the files
-    console.log("Merging the summary files")
-    final_summaries = internal_review / "summaries.parquet"
-    # Merge the files with duckdb
 
-    pl.scan_parquet(local_summary_files).sink_parquet(
-        final_summaries, statistics="full"
-    )
+    # Create a string of the file names readable by duckdb
+    lsf_str = ",".join("'" + str(p) + "'" for p in local_summary_files)
+
+    # Merge the files
+    final_summaries = internal_review / "summaries.parquet"
+    console.log("Merging the summary files")
+    console.log(local_summary_files)
+
+    # Merge the files with duckdb for better RAM usage
+    conn.sql(f"""
+    CREATE VIEW summaries AS FROM
+    read_parquet([{lsf_str}]);
+
+    COPY summaries TO '{str(final_summaries)}' (CODEC 'zstd');
+    """)
 
     # === Upload the merged files to the post-process container ========================
-    # Not yet sure if this is really what we want.
-    blob_path_summary_file = os.path.join(
-        os.path.commonprefix(local_summary_files), "summaries.parquet"
-    )
-    with open(final_summaries, "rb") as data:
-        output_ctr_client.upload_blob(name=blob_path_summary_file, data=data)
+    console.status("Uploading the merged files to the post-process container")
+    try:
+        with final_summaries.open("rb") as data:
+            output_ctr_client.upload_blob(
+                name=str(final_summaries),
+                data=data,
+                overwrite=overwrite_blobs,
+            )
+            console.log(
+                f"Uploaded the summaries to {output_ctr_client.url}/{final_summaries}"
+            )
+    except Exception as e:
+        console.log(f"Failed to upload the summaries: {e}")
 
-    blob_path_samples_file = os.path.join(
-        os.path.commonprefix(local_sample_files), "samples.parquet"
-    )
-    with open(final_samples, "rb") as data:
-        output_ctr_client.upload_blob(name=blob_path_samples_file, data=data)
+    try:
+        with final_samples.open("rb") as data:
+            output_ctr_client.upload_blob(
+                name=str(final_samples),
+                data=data,
+                overwrite=overwrite_blobs,
+            )
+            console.log(
+                f"Uploaded the samples to {output_ctr_client.url}/{final_samples}"
+            )
+    except Exception as e:
+        console.log(f"Failed to upload the samples: {e}")
+
+    # === Clean up =====================================================================
+    conn.close()
 
 
 @dataclass
@@ -221,4 +261,5 @@ if __name__ == "__main__":
         max_runat=max_runat,
         prod_date=prod_date,
         rt_output_container_name=rt_output_container_name,
+        overwrite_blobs=True,
     )
