@@ -105,20 +105,20 @@ def merge_task_files(
     # === Find and download all of the metadata files ==================================
     # Get a list of the metadata files, just the ones that were created at or after
     # `min_runat`. Can revisit this datetime cutoff if needed
-    # console.status("Finding metadata files")
-    # metadata_files: list[str] = [
-    #     b.name
-    #     for b in input_ctr_client.list_blobs()
-    #     if b.name.endswith("metadata.json")
-    #     and (b.creation_time >= min_runat)
-    #     and (b.creation_time <= max_runat)
-    # ]
-    # # Download the metadata files into the internal-review folder
-    # for mf in track(metadata_files, description="Downloading metadata files"):
-    #     to_write = meta / mf
-    #     to_write.parent.mkdir(parents=True, exist_ok=True)
-    #     with open(to_write, "wb") as f:
-    #         f.write(input_ctr_client.download_blob(mf).readall())
+    console.status("Finding metadata files")
+    metadata_files: list[str] = [
+        b.name
+        for b in input_ctr_client.list_blobs()
+        if b.name.endswith("metadata.json")
+        and (b.creation_time >= min_runat)
+        and (b.creation_time <= max_runat)
+    ]
+    # Download the metadata files into the internal-review folder
+    for mf in track(metadata_files, description="Downloading metadata files"):
+        to_write = meta / mf
+        to_write.parent.mkdir(parents=True, exist_ok=True)
+        with open(to_write, "wb") as f:
+            f.write(input_ctr_client.download_blob(mf).readall())
 
     # === Using the metadata files, get the tasks we want to merge =================
     md_path = str(meta / "**/metadata.json")
