@@ -4,7 +4,7 @@ from pathlib import Path
 
 import duckdb
 import polars as pl
-from azure.identity import DefaultAzureCredential
+from azure.identity import EnvironmentCredential
 from azure.storage.blob import BlobServiceClient
 from azure.storage.blob._container_client import ContainerClient
 from rich.console import Console
@@ -93,7 +93,7 @@ def merge_task_files(
     console.status("Setting up blob service clients")
     bsc = BlobServiceClient(
         AzureStorage.AZURE_STORAGE_ACCOUNT_URL,
-        credential=DefaultAzureCredential(),
+        credential=EnvironmentCredential(),
     )
     input_ctr_client: ContainerClient = bsc.get_container_client(
         rt_output_container_name
@@ -231,6 +231,20 @@ def merge_task_files(
             )
     except Exception as e:
         console.log(f"Failed to upload the samples: {e}")
+
+    # Upload the metadata df as a parquet file
+    try:
+        md_file = meta / "metadata.parquet"
+        prod_runs.write_parquet(md_file)
+        with md_file.open("rb") as data:
+            output_ctr_client.upload_blob(
+                name=str(md_file),
+                data=data,
+                overwrite=overwrite_blobs,
+            )
+            console.log(f"Uploaded the metadata to {output_ctr_client.url}/{md_file}")
+    except Exception as e:
+        console.log(f"Failed to upload the metadata: {e}")
 
     # === Clean up =====================================================================
     conn.close()
