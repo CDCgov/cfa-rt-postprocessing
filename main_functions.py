@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-import polars as pl
 import duckdb
+import polars as pl
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 from azure.storage.blob._container_client import ContainerClient
@@ -20,7 +20,7 @@ def merge_task_files(
     max_runat: datetime,
     prod_date: date | None,
     rt_output_container_name: str = "nssp_rt",
-    post_process_container_name: str = "nssp_rt_post_process",
+    post_process_container_name: str = "nssp-rt-post-process",
 ):
     """
     Merge multiple task sample and summary files within a specified time range.
@@ -124,14 +124,18 @@ def merge_task_files(
     conn = duckdb.connect()
     prod_runs: pl.DataFrame = (
         # Find all the metadata files
-        conn.sql(f"SELECT * FROM '{md_path}'")
+        conn.sql(f"SELECT * FROM read_json('{md_path}', auto_detect=true)")
         .pl()
+        # Make run_at a datetime. Do it in polars bc doing it in duckdb loses the tzinfo
+        # when transferring to polars
+        .with_columns(pl.col.run_at.str.to_datetime("%Y-%m-%dT%H:%M:%S%z"))
         # Filter by the run at times
         .filter(pl.col.run_at.is_between(min_runat, max_runat, closed="both"))
         .sort("run_at")
         # Keep just the most recently run tasks
         .unique(subset=["disease", "geo_value", "production_date"], keep="last")
     )
+    console.log(f"Found {len(prod_runs)} tasks to merge")
 
     # === Merge the sample files ===================================================
     # Download the samples files
@@ -141,6 +145,7 @@ def merge_task_files(
         description="Downloading samples",
     ):
         lsf: Path = internal_review / sf
+        lsf.parent.mkdir(parents=True, exist_ok=True)
         local_sample_files.append(lsf)
         with lsf.open("wb") as f:
             f.write(input_ctr_client.download_blob(sf).readall())
@@ -149,18 +154,18 @@ def merge_task_files(
     local_sample_files.sort()
     # Merge the files
     final_samples = internal_review / "samples.parquet"
-    pl.scan_parquet(local_sample_files).sort(["geo_value", "disease"]).sink_parquet(
-        final_samples, statistics="full"
-    )
+    console.log("Merging the sample files")
+    pl.scan_parquet(local_sample_files).sink_parquet(final_samples, statistics="full")
 
     # === Merge the summary files ==================================================
     # Download the summary files
-    local_summary_files: list[str] = []
+    local_summary_files: list[Path] = []
     for sf in track(
-        prod_runs.get_column("summaries_paths"),
+        prod_runs.get_column("summaries_path"),
         description="Downloading summaries",
     ):
         lsf: Path = internal_review / sf
+        lsf.parent.mkdir(parents=True, exist_ok=True)
         local_summary_files.append(lsf)
         with lsf.open("wb") as f:
             f.write(input_ctr_client.download_blob(sf).readall())
@@ -168,8 +173,11 @@ def merge_task_files(
     # Sort for nicer sorting in the final parquet
     local_summary_files.sort()
     # Merge the files
+    console.log("Merging the summary files")
     final_summaries = internal_review / "summaries.parquet"
-    pl.scan_parquet(local_summary_files).sort(["geo_value", "disease"]).sink_parquet(
+    # Merge the files with duckdb
+
+    pl.scan_parquet(local_summary_files).sink_parquet(
         final_summaries, statistics="full"
     )
 
@@ -202,10 +210,15 @@ class AzureStorage:
 if __name__ == "__main__":
     # Note that the dates in blob storage are in UTC, so when looking for files, we need
     # to use UTC times.
+    release_name = "2024-12-12"
+    min_runat = datetime(2024, 12, 10, hour=21, minute=10, tzinfo=timezone.utc)
+    max_runat = datetime(2024, 12, 10, hour=22, minute=20, tzinfo=timezone.utc)
+    prod_date = date(2022, 1, 1)
+    rt_output_container_name = "zs-test-pipeline-update"
     merge_task_files(
-        release_name="2024-12-12",
-        min_runat=datetime(2024, 12, 10, hour=21, minute=10, tzinfo=timezone.utc),
-        max_runat=datetime(2024, 12, 10, hour=22, minute=20, tzinfo=timezone.utc),
-        prod_date=date(2022, 1, 1),
-        rt_output_container_name="zs-test-pipeline-update",
+        release_name=release_name,
+        min_runat=min_runat,
+        max_runat=max_runat,
+        prod_date=prod_date,
+        rt_output_container_name=rt_output_container_name,
     )
