@@ -116,6 +116,8 @@ def merge_task_files(
     # Use duckdb here bc polars apparen't can't read multiple json files unless they are
     # ndjson, and these are not
     conn = duckdb.connect()
+    # Make sure we stay under the RAM limit. A Function node has 1.5GB RAM
+    conn.sql("SET memory_limit = '1.1GB';")
     prod_runs: pl.DataFrame = (
         # Find all the metadata files
         conn.sql(f"SELECT * FROM read_json('{md_path}', auto_detect=true)")
@@ -128,6 +130,17 @@ def merge_task_files(
         .sort("run_at")
         # Keep just the most recently run tasks
         .unique(subset=["disease", "geo_value", "production_date"], keep="last")
+        # Add paths to the samples and summaries from inside the blob container.
+        # These are not necessarily the same as the sample and summary paths in the
+        # metadata files, so we need to add them here so we know where to look in
+        # the blob container.
+        .with_columns(
+            blob_samples_path=pl.col.job_id + "/samples/" + pl.col.task_id + ".parquet",
+            blob_summaries_path=pl.col.job_id
+            + "/summaries/"
+            + pl.col.task_id
+            + ".parquet",
+        )
     )
     console.log(f"Found {len(prod_runs)} tasks to merge")
 
@@ -144,7 +157,7 @@ def merge_task_files(
     # Download the samples files
     local_sample_files: list[Path] = []
     for sf in track(
-        prod_runs.get_column("samples_path"),
+        prod_runs.get_column("blob_samples_path"),
         description="Downloading samples",
     ):
         lsf: Path = internal_review / sf
@@ -165,18 +178,23 @@ def merge_task_files(
     console.log(local_sample_files)
 
     # Merge the files with duckdb for better RAM usage
-    conn.sql(f"""
+    conn.sql(
+        f"""
     CREATE VIEW samples AS FROM
     read_parquet([{lsf_str}]);
 
-    COPY samples TO '{str(final_samples)}' (CODEC 'zstd');
-    """)
+    COPY samples TO '{str(final_samples)}'
+    -- compression level only works with zstd. Compress a lot so we can fit on
+    -- the Azure Function node disk space. min 1, max 22
+    (CODEC 'zstd', COMPRESSION_LEVEL 15);
+    """
+    )
 
     # === Merge the summary files ==================================================
     # Download the summary files
     local_summary_files: list[Path] = []
     for sf in track(
-        prod_runs.get_column("summaries_path"),
+        prod_runs.get_column("blob_summaries_path"),
         description="Downloading summaries",
     ):
         lsf: Path = internal_review / sf
@@ -197,12 +215,17 @@ def merge_task_files(
     console.log(local_summary_files)
 
     # Merge the files with duckdb for better RAM usage
-    conn.sql(f"""
+    conn.sql(
+        f"""
     CREATE VIEW summaries AS FROM
     read_parquet([{lsf_str}]);
 
-    COPY summaries TO '{str(final_summaries)}' (CODEC 'zstd');
-    """)
+    COPY summaries TO '{str(final_summaries)}'
+    -- compression level only works with zstd. Compress a lot so we can fit on
+    -- the Azure Function node disk space. min 1, max 22
+    (CODEC 'zstd', COMPRESSION_LEVEL 15);
+    """
+    )
 
     # === Upload the merged files to the post-process container ========================
     console.status("Uploading the merged files to the post-process container")
@@ -264,9 +287,9 @@ class AzureStorage:
 if __name__ == "__main__":
     # Note that the dates in blob storage are in UTC, so when looking for files, we need
     # to use UTC times.
-    release_name = "2024-12-12"
-    min_runat = datetime(2024, 12, 10, hour=21, minute=10, tzinfo=timezone.utc)
-    max_runat = datetime(2024, 12, 10, hour=22, minute=20, tzinfo=timezone.utc)
+    release_name = "2024-12-23"
+    min_runat = datetime(2024, 12, 17, hour=20, minute=00, tzinfo=timezone.utc)
+    max_runat = datetime(2024, 12, 17, hour=22, minute=20, tzinfo=timezone.utc)
     prod_date = date(2022, 1, 1)
     rt_output_container_name = "zs-test-pipeline-update"
     merge_task_files(
