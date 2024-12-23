@@ -39,15 +39,6 @@ def merge_task_files(
     |   |   |   |   |   ├── <location>.png
     |   |   |   |   |   ├── <location>.png
     |   |   |   |   ├── ...
-    |   |   ├── job_<jobid>/
-    |   |   |   ├── merged.csv
-    |   |   |   ├── plots/
-    |   |   |   |   ├── choropleth.png
-    |   |   |   |   ├── lineinterval.png
-    |   |   |   |   ├── timeseries/
-    |   |   |   |   |   ├── <location>.png
-    |   |   |   |   |   ├── <location>.png
-    |   |   |   |   |   ├── ...
     |   ├── release/
     |   |   ├── merged_release.csv
     |   |   ├── <rundate>_<disease1>_map_data.csv
@@ -139,6 +130,15 @@ def merge_task_files(
         .unique(subset=["disease", "geo_value", "production_date"], keep="last")
     )
     console.log(f"Found {len(prod_runs)} tasks to merge")
+
+    # === Create the <release-name>/interal_review/<job_id>/ folders ===============
+    # Get the unique job-ids
+    job_ids: list[str] = prod_runs.get_column("job_id").unique().to_list()
+
+    # Create the job folders
+    for job_id in job_ids:
+        job_folder = internal_review / job_id
+        job_folder.mkdir(parents=True, exist_ok=True)
 
     # === Merge the sample files ===================================================
     # Download the samples files
