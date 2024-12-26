@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 import duckdb
@@ -17,7 +17,6 @@ def merge_task_files(
     release_name: str,
     min_runat: datetime,
     max_runat: datetime,
-    prod_date: date | None,
     rt_output_container_name: str = "nssp_rt",
     post_process_container_name: str = "nssp-rt-post-process",
     overwrite_blobs: bool = False,
@@ -257,7 +256,7 @@ def merge_task_files(
 
     # Upload the metadata df as a parquet file
     try:
-        md_file = meta / "metadata.parquet"
+        md_file = internal_review / "metadata.parquet"
         prod_runs.write_parquet(md_file)
         with md_file.open("rb") as data:
             output_ctr_client.upload_blob(
@@ -282,21 +281,3 @@ class AzureStorage:
     AZURE_STORAGE_ACCOUNT_URL: str = "https://cfaazurebatchprd.blob.core.windows.net/"
     AZURE_CONTAINER_NAME: str = "rt-epinow2-config"
     SCOPE_URL: str = "https://cfaazurebatchprd.blob.core.windows.net/.default"
-
-
-if __name__ == "__main__":
-    # Note that the dates in blob storage are in UTC, so when looking for files, we need
-    # to use UTC times.
-    release_name = "2024-12-23"
-    min_runat = datetime(2024, 12, 17, hour=20, minute=00, tzinfo=timezone.utc)
-    max_runat = datetime(2024, 12, 17, hour=22, minute=20, tzinfo=timezone.utc)
-    prod_date = date(2022, 1, 1)
-    rt_output_container_name = "zs-test-pipeline-update"
-    merge_task_files(
-        release_name=release_name,
-        min_runat=min_runat,
-        max_runat=max_runat,
-        prod_date=prod_date,
-        rt_output_container_name=rt_output_container_name,
-        overwrite_blobs=True,
-    )
