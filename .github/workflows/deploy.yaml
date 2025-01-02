@@ -30,4 +30,4 @@ jobs:
       uses: docker/build-push-action@v6
       with:
         push: true
-        tags: cfaprdbatchcr.azurecr.io/rt-post-processing:latest
+        tags: cfaprdbatchcr.azurecr.io/rt-postprocessing:latest
