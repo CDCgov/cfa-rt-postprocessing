@@ -22,7 +22,7 @@ jobs:
     - name: Azure ACR login
       uses: azure/docker-login@v2
       with:
-        login-server: cfaprdconfigvalidation.azurecr.io
+        login-server: cfaprdbatchcr.azurecr.io
         username: ${{ secrets.AZURE_CLIENT_ID }}
         password: ${{ secrets.AZURE_CLIENT_SECRET }}
 
@@ -30,12 +30,4 @@ jobs:
       uses: docker/build-push-action@v6
       with:
         push: true
-        tags: cfaprdconfigvalidation.azurecr.io/rt-post-processing:${{ github.sha }}
-
-    - name: Build and deploy Container App
-      uses: azure/container-apps-deploy-action@v1
-      with:
-        acrName: cfaprdconfigvalidation
-        containerAppName: configvalidation
-        resourceGroup: EXT-EDAV-CFA-PRD
-        imageToDeploy: cfaprdconfigvalidation.azurecr.io/rt-post-processing:${{ github.sha }}
+        tags: cfaprdbatchcr.azurecr.io/rt-post-processing:latest
