@@ -5,6 +5,7 @@ description = "For postprocessing the output of the EpiNow2 Rt pipeline."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "altair[all]>=5.5.0",
     "azure-functions>=1.21.3",
     "azure-identity>=1.19.0",
     "azure-storage-blob>=12.24.0",
@@ -13,6 +14,7 @@ dependencies = [
     "pyarrow>=18.1.0",
     "rich>=13.9.4",
     "typer>=0.15.1",
+    "vega-datasets>=0.9.0",
 ]
 
 [dependency-groups]
