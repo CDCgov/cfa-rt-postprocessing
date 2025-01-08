@@ -28,5 +28,5 @@ ENV PATH="/app/.venv/bin:$PATH"
 # Reset the entrypoint, don't invoke `uv`
 ENTRYPOINT []
 
-EXPOSE 5000
+EXPOSE 8000
 CMD ["gunicorn", "--config", "gunicorn_config.py", "postprocessing_server.app:app"]
