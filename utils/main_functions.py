@@ -4,7 +4,7 @@ from shutil import rmtree
 
 import duckdb
 import polars as pl
-from azure.identity import EnvironmentCredential
+from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 from azure.storage.blob._container_client import ContainerClient
 from rich.console import Console
@@ -130,7 +130,7 @@ def merge_task_files(
     console.status("Setting up blob service clients")
     bsc = BlobServiceClient(
         AzureStorage.AZURE_STORAGE_ACCOUNT_URL,
-        credential=EnvironmentCredential(),
+        credential=DefaultAzureCredential(),
     )
     input_ctr_client: ContainerClient = bsc.get_container_client(
         rt_output_container_name
