@@ -14,6 +14,47 @@ from utils.azure import AzureStorage
 console = Console()
 
 
+def validate_args(args):
+    """
+    Validate the arguments passed to the merge function.
+
+    Parameters
+    ----------
+    args : dict
+        The arguments passed to the merge function.
+
+    Returns
+    -------
+    dict
+        The validated arguments.
+    """
+    if "release_name" not in args or "min_runat" not in args or "max_runat" not in args:
+        raise ValueError("release_name, min_runat, and max_runat are required")
+
+    # Validate the datetime arguments
+    try:
+        min_runat = datetime.fromisoformat(args.get("min_runat"))
+        max_runat = datetime.fromisoformat(args.get("max_runat"))
+    except ValueError:
+        raise ValueError("min_runat and max_runat must be ISO-formatted strings")
+
+    # Validate the optional arguments
+    rt_output_container_name = args.get("rt_output_container_name", "nssp_rt")
+    post_process_container_name = args.get(
+        "post_process_container_name", "nssp-rt-post-process"
+    )
+    overwrite_blobs = args.get("overwrite_blobs", False)
+
+    return {
+        "release_name": args.get("release_name"),
+        "min_runat": min_runat,
+        "max_runat": max_runat,
+        "rt_output_container_name": rt_output_container_name,
+        "post_process_container_name": post_process_container_name,
+        "overwrite_blobs": overwrite_blobs,
+    }
+
+
 def merge_task_files(
     release_name: str,
     min_runat: datetime,
