@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -9,6 +8,8 @@ from azure.storage.blob import BlobServiceClient
 from azure.storage.blob._container_client import ContainerClient
 from rich.console import Console
 from rich.progress import track
+
+from utils.azure import AzureStorage
 
 console = Console()
 
@@ -270,14 +271,3 @@ def merge_task_files(
 
     # === Clean up =====================================================================
     conn.close()
-
-
-@dataclass
-class AzureStorage:
-    """
-    For some useful constants
-    """
-
-    AZURE_STORAGE_ACCOUNT_URL: str = "https://cfaazurebatchprd.blob.core.windows.net/"
-    AZURE_CONTAINER_NAME: str = "rt-epinow2-config"
-    SCOPE_URL: str = "https://cfaazurebatchprd.blob.core.windows.net/.default"

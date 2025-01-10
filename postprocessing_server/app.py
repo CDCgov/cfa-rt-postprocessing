@@ -9,4 +9,4 @@ def base():
     Returns:
         str: Startup message.
     """
-    return "<p>Rt postprocessing validation server running.</p>"
+    return "<p>Rt postprocessing server running.</p>"
