@@ -1,8 +1,7 @@
-from random import choices
-
 import altair as alt
+import numpy as np
 from vega_datasets import data
-import pandas as pl
+import polars as pl
 
 
 def create_choropleth(p_growing: pl.DataFrame, states: alt.ChartDataType) -> alt.Chart:
@@ -10,6 +9,16 @@ def create_choropleth(p_growing: pl.DataFrame, states: alt.ChartDataType) -> alt
     Create a choropleth map of the US states with the probability of growing.
     Return the altair chart object.
     """
+    # Bin `p_growing` into 5 categories, and assign a color to each category
+    categories = five_cat_hexcolor()
+    df = p_growing.join_asof(
+        categories,
+        left_on="p_growing",
+        right_on="upper_threshold",
+        strategy="forward",
+    )
+    cats = dict(zip(categories["cat"], categories["hex"]))
+
     return (
         alt.Chart(states)
         .mark_geoshape(stroke="white", strokeWidth=1.5)
@@ -17,23 +26,22 @@ def create_choropleth(p_growing: pl.DataFrame, states: alt.ChartDataType) -> alt
         .transform_lookup(
             lookup="id",
             from_=alt.LookupData(
-                p_growing,
+                df,
                 "id",
-                p_growing.columns.tolist(),
+                df.columns,
             ),
         )
         .encode(
-            color=alt.Color(
-                "p_growing:Q",
-                scale=alt.Scale(scheme="cividis"),
-            ).legend(title="P(growing)"),
+            color=alt.Color("cat:N")
+            .scale(domain=cats.keys(), range=cats.values())
+            .legend(title="P(growing)", orient="right"),
             tooltip=[
                 alt.Tooltip("state:N", title="State"),
                 alt.Tooltip("p_growing:Q", title="P(growing)"),
             ],
         )
         .interactive()
-        .properties(width=1_000, height=1_000)
+        .properties(width=750, height=750)
     )
 
 
@@ -93,26 +101,35 @@ def states() -> list[str]:
     ]
 
 
-def five_cat_hexcolor() -> dict[str, str]:
-    return {
-        "Growing": "#6d085a",
-        "Likely Growing": "#b83d93",
-        "Not Changing": "#bdbdbd",
-        "Likely Declining": "#3bbbb0",
-        "Declining": "#006166",
-        "Not Estimated": "#ffffff",
-    }
+def five_cat_hexcolor() -> pl.DataFrame:
+    df = pl.DataFrame(
+        dict(
+            cat=[
+                "Growing",
+                "Likely Growing",
+                "Not Changing",
+                "Likely Declining",
+                "Declining",
+                "Not Estimated",
+            ],
+            hex=["#6d085a", "#b83d93", "#bdbdbd", "#3bbbb0", "#006166", "#ffffff"],
+            lower_threshold=[0.9, 0.75, 0.25, 0.10, 0.0, None],
+            upper_threshold=[1.0, 0.9, 0.75, 0.25, 0.10, None],
+        )
+    ).sort("upper_threshold")
+    return df
 
 
 if __name__ == "__main__":
-    states = alt.topo_feature(url=data.us_10m.url, feature="states")
+    states_data = alt.topo_feature(url=data.us_10m.url, feature="states")
 
     # Create some fake p_growing data
     N = 60
     p_growing = pl.DataFrame(
         dict(
             id=range(0, N),
-            p_growing=choices(population=[1 / (x + 1) for x in range(5)], k=N),
+            state=np.random.choice(states(), N),
+            p_growing=np.random.rand(N),
         )
-    )
-    create_choropleth(p_growing, states).save("choropleth.html")
+    ).sort("p_growing")
+    create_choropleth(p_growing, states_data).save("choropleth.html")
