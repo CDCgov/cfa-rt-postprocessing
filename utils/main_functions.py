@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import duckdb
@@ -33,8 +33,12 @@ def validate_args(args):
 
     # Validate the datetime arguments
     try:
-        min_runat = datetime.fromisoformat(args.get("min_runat"))
-        max_runat = datetime.fromisoformat(args.get("max_runat"))
+        min_runat = datetime.fromisoformat(args.get("min_runat")).replace(
+            tzinfo=timezone.utc
+        )
+        max_runat = datetime.fromisoformat(args.get("max_runat")).replace(
+            tzinfo=timezone.utc
+        )
     except ValueError:
         raise ValueError("min_runat and max_runat must be ISO-formatted strings")
 
@@ -154,7 +158,8 @@ def merge_task_files(
 
     # === Using the metadata files, get the tasks we want to merge =================
     md_path = str(meta / "**/metadata.json")
-    # Use duckdb here bc polars apparen't can't read multiple json files unless they are
+
+    # Use duckdb here bc polars apparently can't read multiple json files unless they are
     # ndjson, and these are not
     conn = duckdb.connect()
     # Make sure we stay under the RAM limit. A Function node has 1.5GB RAM
@@ -184,7 +189,6 @@ def merge_task_files(
         )
     )
     console.log(f"Found {len(prod_runs)} tasks to merge")
-
     # === Create the <release-name>/interal_review/<job_id>/ folders ===============
     # Get the unique job-ids
     job_ids: list[str] = prod_runs.get_column("job_id").unique().to_list()

@@ -28,7 +28,11 @@ def merge():
         flask.Response: JSON response with status and message.
     """
     try:
-        validated_args = validate_args(request.args)
-        merge_task_files(validated_args)
+        validated_args = validate_args(request.json)
+        merge_task_files(**validated_args)
+        response_message = f"Task files successfully merged at {validated_args['post_process_container_name']}/{validated_args['release_name']}"
+        return Response(
+            response=response_message, status=200, mimetype="application/json"
+        )
     except Exception as e:
         return Response(response=str(e), status=400, mimetype="application/json")
