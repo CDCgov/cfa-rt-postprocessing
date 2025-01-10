@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from pathlib import Path
+from shutil import rmtree
 
 import duckdb
 import polars as pl
@@ -316,3 +317,4 @@ def merge_task_files(
 
     # === Clean up =====================================================================
     conn.close()
+    rmtree(root)
