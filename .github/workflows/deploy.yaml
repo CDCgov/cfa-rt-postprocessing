@@ -30,3 +30,11 @@ jobs:
       with:
         push: true
         tags: cfaprdbatchcr.azurecr.io/rt-postprocessing:${{ github.sha }}
+
+    - name: Build and deploy Container App
+      uses: azure/container-apps-deploy-action@v1
+      with:
+        acrName: cfaprdbatchcr
+        containerAppName: rtpostprocessing01
+        resourceGroup: EXT-EDAV-CFA-PRD
+        imageToDeploy: cfaprdbatchcr.azurecr.io/rt-postprocessing:${{ github.sha }}
