@@ -112,6 +112,7 @@ def five_cat_hexcolor() -> pl.DataFrame:
                 "Declining",
                 "Not Estimated",
             ],
+            #     purple,    pink,       grey,      teal,    dark teal,  white
             hex=["#6d085a", "#b83d93", "#bdbdbd", "#3bbbb0", "#006166", "#ffffff"],
             lower_threshold=[0.9, 0.75, 0.25, 0.10, 0.0, None],
             upper_threshold=[1.0, 0.9, 0.75, 0.25, 0.10, None],
