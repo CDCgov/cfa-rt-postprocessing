@@ -1,16 +1,63 @@
-from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+from shutil import rmtree
 
 import duckdb
 import polars as pl
-from azure.identity import EnvironmentCredential
+from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 from azure.storage.blob._container_client import ContainerClient
 from rich.console import Console
 from rich.progress import track
 
+from utils.azure import AzureStorage
+
 console = Console()
+
+
+def validate_args(args):
+    """
+    Validate the arguments passed to the merge function.
+
+    Parameters
+    ----------
+    args : dict
+        The arguments passed to the merge function.
+
+    Returns
+    -------
+    dict
+        The validated arguments.
+    """
+    if "release_name" not in args or "min_runat" not in args or "max_runat" not in args:
+        raise ValueError("release_name, min_runat, and max_runat are required")
+
+    # Validate the datetime arguments
+    try:
+        min_runat = datetime.fromisoformat(args.get("min_runat")).replace(
+            tzinfo=timezone.utc
+        )
+        max_runat = datetime.fromisoformat(args.get("max_runat")).replace(
+            tzinfo=timezone.utc
+        )
+    except ValueError:
+        raise ValueError("min_runat and max_runat must be ISO-formatted strings")
+
+    # Validate the optional arguments
+    rt_output_container_name = args.get("rt_output_container_name", "nssp_rt")
+    post_process_container_name = args.get(
+        "post_process_container_name", "nssp-rt-post-process"
+    )
+    overwrite_blobs = args.get("overwrite_blobs", False)
+
+    return {
+        "release_name": args.get("release_name"),
+        "min_runat": min_runat,
+        "max_runat": max_runat,
+        "rt_output_container_name": rt_output_container_name,
+        "post_process_container_name": post_process_container_name,
+        "overwrite_blobs": overwrite_blobs,
+    }
 
 
 def merge_task_files(
@@ -83,7 +130,7 @@ def merge_task_files(
     console.status("Setting up blob service clients")
     bsc = BlobServiceClient(
         AzureStorage.AZURE_STORAGE_ACCOUNT_URL,
-        credential=EnvironmentCredential(),
+        credential=DefaultAzureCredential(),
     )
     input_ctr_client: ContainerClient = bsc.get_container_client(
         rt_output_container_name
@@ -112,11 +159,11 @@ def merge_task_files(
 
     # === Using the metadata files, get the tasks we want to merge =================
     md_path = str(meta / "**/metadata.json")
-    # Use duckdb here bc polars apparen't can't read multiple json files unless they are
+
+    # Use duckdb here bc polars apparently can't read multiple json files unless they are
     # ndjson, and these are not
     conn = duckdb.connect()
-    # Make sure we stay under the RAM limit. A Function node has 1.5GB RAM
-    conn.sql("SET memory_limit = '1.1GB';")
+
     prod_runs: pl.DataFrame = (
         # Find all the metadata files
         conn.sql(f"SELECT * FROM read_json('{md_path}', auto_detect=true)")
@@ -142,7 +189,6 @@ def merge_task_files(
         )
     )
     console.log(f"Found {len(prod_runs)} tasks to merge")
-
     # === Create the <release-name>/interal_review/<job_id>/ folders ===============
     # Get the unique job-ids
     job_ids: list[str] = prod_runs.get_column("job_id").unique().to_list()
@@ -270,14 +316,4 @@ def merge_task_files(
 
     # === Clean up =====================================================================
     conn.close()
-
-
-@dataclass
-class AzureStorage:
-    """
-    For some useful constants
-    """
-
-    AZURE_STORAGE_ACCOUNT_URL: str = "https://cfaazurebatchprd.blob.core.windows.net/"
-    AZURE_CONTAINER_NAME: str = "rt-epinow2-config"
-    SCOPE_URL: str = "https://cfaazurebatchprd.blob.core.windows.net/.default"
+    rmtree(root)
