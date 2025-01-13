@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import typer
 from typing_extensions import Annotated
 
-from main_functions import merge_task_files
+from utils.main_functions import merge_task_files
 
 
 def main(
