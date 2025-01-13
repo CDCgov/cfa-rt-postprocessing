@@ -163,8 +163,7 @@ def merge_task_files(
     # Use duckdb here bc polars apparently can't read multiple json files unless they are
     # ndjson, and these are not
     conn = duckdb.connect()
-    # Make sure we stay under the RAM limit. A Function node has 1.5GB RAM
-    conn.sql("SET memory_limit = '1.1GB';")
+
     prod_runs: pl.DataFrame = (
         # Find all the metadata files
         conn.sql(f"SELECT * FROM read_json('{md_path}', auto_detect=true)")
