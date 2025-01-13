@@ -1,7 +1,7 @@
 import altair as alt
 import numpy as np
-from vega_datasets import data
 import polars as pl
+from vega_datasets import data
 
 
 def create_choropleth(p_growing: pl.DataFrame, states: alt.ChartDataType) -> alt.Chart:
