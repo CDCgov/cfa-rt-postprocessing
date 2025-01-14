@@ -1,9 +1,8 @@
 from datetime import datetime, timezone
 
 import typer
+from main_functions import merge_and_render_anomaly
 from typing_extensions import Annotated
-
-from utils.main_functions import merge_and_render_anomaly
 
 
 def main(

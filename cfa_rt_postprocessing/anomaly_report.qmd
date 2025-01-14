@@ -1,6 +1,6 @@
 ---
 title: "Rt Anomaly Report"
-format: 
+format:
     html:
         code-fold: true
 jupyter: python3

@@ -11,7 +11,7 @@ from azure.storage.blob._container_client import ContainerClient
 from rich.console import Console
 from rich.progress import track
 
-from utils.azure import AzureStorage
+from azure_constants import AzureStorage
 
 console = Console()
 
@@ -316,23 +316,32 @@ def merge_and_render_anomaly(
         console.log(f"Failed to upload the metadata: {e}")
 
     # === Render and upload anomaly report =============================================
-    console.status("Rendering the anomaly report")
-    rendered_report = internal_review / "anomaly_report.html"
-    quarto.render(
-        input="cfa_rt_postprocessing/anomaly_report.qmd",
-        output_file=str(rendered_report),
-    )
+    try:
+        console.status("Rendering the anomaly report")
+        rendered_report = internal_review / "anomaly_report"
+        unrendered_report = Path("cfa_rt_postprocessing") / "anomaly_report.qmd"
+        rendered_report = unrendered_report.parent / (unrendered_report.stem + ".html")
+        desired_report_location = internal_review / "anomaly_report.html"
+        quarto.render(input=unrendered_report)
+
+        # Move the rendered report to the internal-review folder
+        rendered_report.replace(desired_report_location)
+        console.status(f"Moved the rendered report to {desired_report_location}")
+        console.status(f"Report is available at {rendered_report}")
+
+    except Exception as e:
+        console.log(f"Failed to render the anomaly report: {e}")
 
     # Upload the anomaly report
     try:
-        with rendered_report.open("rb") as data:
+        with desired_report_location.open("rb") as data:
             output_ctr_client.upload_blob(
-                name=str(rendered_report),
+                name=str(desired_report_location),
                 data=data,
                 overwrite=overwrite_blobs,
             )
             console.log(
-                f"Uploaded the anomaly report to {output_ctr_client.url}/{rendered_report}"
+                f"Uploaded the anomaly report to {output_ctr_client.url}/{desired_report_location}"
             )
     except Exception as e:
         console.log(f"Failed to upload the anomaly report: {e}")
@@ -340,3 +349,17 @@ def merge_and_render_anomaly(
     # === Clean up =====================================================================
     conn.close()
     rmtree(root)
+
+
+if __name__ == "__main__":
+    # Some sample inputs for testing. Need to move something like this to an actual test
+    args = {
+        "release_name": "2025-01-14",
+        "min_runat": "2024-12-17T19:40:06",
+        "max_runat": "2024-12-18T00:00:00",
+        "rt_output_container_name": "zs-test-pipeline-update",
+        "post_process_container_name": "nssp-rt-post-process",
+        "overwrite_blobs": True,
+    }
+    validated_args = validate_args(args)
+    merge_and_render_anomaly(**validated_args)
