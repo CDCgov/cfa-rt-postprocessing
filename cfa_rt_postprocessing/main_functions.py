@@ -8,10 +8,9 @@ import quarto
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 from azure.storage.blob._container_client import ContainerClient
+from azure_constants import AzureStorage
 from rich.console import Console
 from rich.progress import track
-
-from azure_constants import AzureStorage
 
 console = Console()
 
