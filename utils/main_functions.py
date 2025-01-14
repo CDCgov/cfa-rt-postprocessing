@@ -4,6 +4,7 @@ from shutil import rmtree
 
 import duckdb
 import polars as pl
+import quarto
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 from azure.storage.blob._container_client import ContainerClient
@@ -60,7 +61,7 @@ def validate_args(args):
     }
 
 
-def merge_task_files(
+def merge_and_render_anomaly(
     release_name: str,
     min_runat: datetime,
     max_runat: datetime,
@@ -313,6 +314,28 @@ def merge_task_files(
             console.log(f"Uploaded the metadata to {output_ctr_client.url}/{md_file}")
     except Exception as e:
         console.log(f"Failed to upload the metadata: {e}")
+
+    # === Render and upload anomaly report =============================================
+    console.status("Rendering the anomaly report")
+    rendered_report = internal_review / "anomaly_report.html"
+    quarto.render(
+        input="cfa_rt_postprocessing/anomaly_report.qmd",
+        output_file=str(rendered_report),
+    )
+
+    # Upload the anomaly report
+    try:
+        with rendered_report.open("rb") as data:
+            output_ctr_client.upload_blob(
+                name=str(rendered_report),
+                data=data,
+                overwrite=overwrite_blobs,
+            )
+            console.log(
+                f"Uploaded the anomaly report to {output_ctr_client.url}/{rendered_report}"
+            )
+    except Exception as e:
+        console.log(f"Failed to upload the anomaly report: {e}")
 
     # === Clean up =====================================================================
     conn.close()
