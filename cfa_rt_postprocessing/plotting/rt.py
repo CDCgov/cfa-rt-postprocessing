@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import polars as pl
 
 
-def rt(
+def plot_rt(
     summary: pl.DataFrame, state: str, disease: str, ax=None
 ) -> matplotlib.axes.Axes:
     """

@@ -12,7 +12,18 @@ jupyter: python3
 # https://quarto.org/docs/computations/parameters.html
 summary_file = ""
 samples_file = ""
-disease = "COVID-19"
+disease = ""
+```
+```{python}
+# Ensure input parameters have been handed in
+if summary_file == "":
+    raise ValueError("No paramenter handed in for summary file location")
+
+if samples_file == "":
+    raise ValueError("No paramenter handed in for samples file location")
+
+if disease == "":
+    raise ValueError("No disease paramenter handed in")
 ```
 
 # Rt Plots
@@ -22,7 +33,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import polars as pl
 
-from plotting.rt import rt
+from plotting.rt import plot_rt
 
 
 plt.style.use("style.mplstyle")
@@ -35,7 +46,7 @@ states: list[str] = summary.get_column("geo_value").unique().sort().to_list()
 
 # Plot each state
 for state in states:
-    rt(summary, state, disease)
+    plot_rt(summary, state, disease)
 
 
 plt.close()
