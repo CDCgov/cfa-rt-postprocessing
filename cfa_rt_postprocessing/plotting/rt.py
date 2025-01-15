@@ -1,7 +1,7 @@
-import matplotlib.axes
-import matplotlib.pyplot as plt
 import matplotlib
+import matplotlib.axes
 import matplotlib.dates
+import matplotlib.pyplot as plt
 import polars as pl
 
 

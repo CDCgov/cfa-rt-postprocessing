@@ -36,7 +36,7 @@ states: list[str] = summary.get_column("geo_value").unique().sort().to_list()
 # Plot each state
 for state in states:
     rt(summary, state, disease)
-    
-    
+
+
 plt.close()
 ```
