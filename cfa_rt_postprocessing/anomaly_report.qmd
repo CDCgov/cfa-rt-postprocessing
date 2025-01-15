@@ -7,8 +7,36 @@ jupyter: python3
 ---
 
 ```{python}
+#| tags: [parameters]
+
+# https://quarto.org/docs/computations/parameters.html
+summary_file = ""
+samples_file = ""
+disease = "COVID-19"
+```
+
+# Rt Plots
+
+```{python}
+import matplotlib
+import matplotlib.pyplot as plt
 import polars as pl
 
-df = pl.DataFrame({"a":[1,2,3], "b":["a","b","c"]})
-print(df)
+from plotting.rt import rt
+
+
+plt.style.use("style.mplstyle")
+matplotlib.rcParams["figure.max_open_warning"] = 52
+
+summary = pl.read_parquet(summary_file)
+
+# Gather the set of unique states
+states: list[str] = summary.get_column("geo_value").unique().sort().to_list()
+
+# Plot each state
+for state in states:
+    rt(summary, state, disease)
+    
+    
+plt.close()
 ```

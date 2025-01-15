@@ -315,13 +315,19 @@ def merge_and_render_anomaly(
         console.log(f"Failed to upload the metadata: {e}")
 
     # === Render and upload anomaly report =============================================
+    console.status("Rendering the anomaly report")
+    rendered_report = internal_review / "anomaly_report"
+    unrendered_report = Path("cfa_rt_postprocessing") / "anomaly_report.qmd"
+    rendered_report = unrendered_report.parent / (unrendered_report.stem + ".html")
+    desired_report_location = internal_review / "anomaly_report.html"
     try:
-        console.status("Rendering the anomaly report")
-        rendered_report = internal_review / "anomaly_report"
-        unrendered_report = Path("cfa_rt_postprocessing") / "anomaly_report.qmd"
-        rendered_report = unrendered_report.parent / (unrendered_report.stem + ".html")
-        desired_report_location = internal_review / "anomaly_report.html"
-        quarto.render(input=unrendered_report)
+        quarto.render(
+            input=unrendered_report,
+            execute_params={
+                "summary_file": str(final_summaries.absolute()),
+                "sample_file": str(final_samples.absolute()),
+            },
+        )
 
         # Move the rendered report to the internal-review folder
         rendered_report.replace(desired_report_location)
@@ -347,7 +353,7 @@ def merge_and_render_anomaly(
 
     # === Clean up =====================================================================
     conn.close()
-    rmtree(root)
+    # rmtree(root)
 
 
 if __name__ == "__main__":
