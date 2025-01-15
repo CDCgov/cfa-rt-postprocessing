@@ -1,0 +1,49 @@
+name: Deploy from Azure to GitHub Pages
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: cfa-cdcgov
+    environment: production
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Download from Azure Blob
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |
+            az storage blob download \
+              --account-name ${{ secrets.STORAGE_ACCOUNT_NAME }} \
+              --container-name ${{ secrets.POSTPROCESS_CONTAINER_NAME }} \
+              --name latest_anomaly_report_covid.html \
+              --file downloaded-site.html \
+              --auth-mode login
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Create _site directory
+        run: |
+          mkdir -p _site
+          mv downloaded-site.html _site/index.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
