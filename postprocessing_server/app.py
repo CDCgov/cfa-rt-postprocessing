@@ -1,6 +1,6 @@
 from flask import Flask, Response, request
 
-from utils.main_functions import merge_task_files, validate_args
+from cfa_rt_postprocessing.main_functions import merge_and_render_anomaly, validate_args
 
 app = Flask(__name__)
 
@@ -14,9 +14,9 @@ def base():
     return "<p>Rt postprocessing server running.</p>"
 
 
-@app.post("/merge")
+@app.post("/merge_and_render")
 def merge():
-    """Route to merge Rt output files.
+    """Route to merge Rt output files, and render the anomaly report.
     Takes inputs (from the request body):
         - release_name
         - min_runat
@@ -29,7 +29,7 @@ def merge():
     """
     try:
         validated_args = validate_args(request.json)
-        merge_task_files(**validated_args)
+        merge_and_render_anomaly(**validated_args)
         response_message = f"Task files successfully merged at {validated_args['post_process_container_name']}/{validated_args['release_name']}"
         return Response(
             response=response_message, status=200, mimetype="application/json"

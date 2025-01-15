@@ -1,9 +1,8 @@
 from datetime import datetime, timezone
 
 import typer
+from main_functions import merge_and_render_anomaly
 from typing_extensions import Annotated
-
-from utils.main_functions import merge_task_files
 
 
 def main(
@@ -48,7 +47,7 @@ def main(
     # parseddatetime objects
     min_runat = min_runat.replace(tzinfo=timezone.utc)
     max_runat = max_runat.replace(tzinfo=timezone.utc)
-    merge_task_files(
+    merge_and_render_anomaly(
         release_name=release_name,
         min_runat=min_runat,
         max_runat=max_runat,
