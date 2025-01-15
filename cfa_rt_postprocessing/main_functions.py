@@ -315,39 +315,114 @@ def merge_and_render_anomaly(
         console.log(f"Failed to upload the metadata: {e}")
 
     # === Render and upload anomaly report =============================================
+    console.status("Rendering the anomaly reports")
+    covid_report = internal_review / "covid_anomaly_report.html"
+    flu_report = internal_review / "influenza_anomaly_report.html"
     try:
-        console.status("Rendering the anomaly report")
-        rendered_report = internal_review / "anomaly_report"
-        unrendered_report = Path("cfa_rt_postprocessing") / "anomaly_report.qmd"
-        rendered_report = unrendered_report.parent / (unrendered_report.stem + ".html")
-        desired_report_location = internal_review / "anomaly_report.html"
-        quarto.render(input=unrendered_report)
-
-        # Move the rendered report to the internal-review folder
-        rendered_report.replace(desired_report_location)
-        console.status(f"Moved the rendered report to {desired_report_location}")
-        console.status(f"Report is available at {rendered_report}")
-
+        # COVID-19
+        render_report(
+            disease="COVID-19",
+            desired_output_location=covid_report,
+            summary_loc=final_summaries,
+            samples_loc=final_samples,
+        )
     except Exception as e:
-        console.log(f"Failed to render the anomaly report: {e}")
+        console.log(f"Failed to render the COVID-19 anomaly report: {e}")
 
-    # Upload the anomaly report
     try:
-        with desired_report_location.open("rb") as data:
-            output_ctr_client.upload_blob(
-                name=str(desired_report_location),
-                data=data,
-                overwrite=overwrite_blobs,
-            )
+        # Influenza
+        render_report(
+            disease="Influenza",
+            desired_output_location=flu_report,
+            summary_loc=final_summaries,
+            samples_loc=final_samples,
+        )
+    except Exception as e:
+        console.log(f"Failed to render the Influenza anomaly report: {e}")
+
+    # Upload the reports
+    try:
+        if covid_report.exists():
+            # To the usual location in the folder for this run
+            with covid_report.open("rb") as data:
+                output_ctr_client.upload_blob(
+                    name=str(covid_report),
+                    data=data,
+                    overwrite=overwrite_blobs,
+                )
             console.log(
-                f"Uploaded the anomaly report to {output_ctr_client.url}/{desired_report_location}"
+                f"Uploaded the covid anomaly report to {output_ctr_client.url}/{covid_report}"
             )
+
+            # To /latest_anomaly_report_covid.html in the container
+            with covid_report.open("rb") as data:
+                output_ctr_client.upload_blob(
+                    name="latest_anomaly_report_covid.html",
+                    data=data,
+                    overwrite=overwrite_blobs,
+                )
+        else:
+            console.log("No covid report to upload. Skipping.")
     except Exception as e:
         console.log(f"Failed to upload the anomaly report: {e}")
 
+    try:
+        if flu_report.exists():
+            # To the usual location in the folder for this run
+            with flu_report.open("rb") as data:
+                output_ctr_client.upload_blob(
+                    name=str(flu_report),
+                    data=data,
+                    overwrite=overwrite_blobs,
+                )
+
+            # To /latest_anomaly_report_flu.html in the container
+            with flu_report.open("rb") as data:
+                output_ctr_client.upload_blob(
+                    name="latest_anomaly_report_flu.html",
+                    data=data,
+                    overwrite=overwrite_blobs,
+                )
+
+            console.log(
+                (
+                    f"Uploaded the flu anomaly report to {output_ctr_client.url}/{flu_report}"
+                    f" and to {output_ctr_client.url}/latest_anomaly_report_flu.html"
+                )
+            )
+        else:
+            console.log("No flu report to upload. Skipping.")
+    except Exception as e:
+        console.log(f"Failed to upload the flu anomaly report: {e}")
+
     # === Clean up =====================================================================
     conn.close()
+    console.log(f"Cleaning up {root} folder")
     rmtree(root)
+
+
+def render_report(
+    disease: str,
+    desired_output_location: Path,
+    summary_loc: Path,
+    samples_loc: Path,
+    unrendered_location: Path = Path("cfa_rt_postprocessing/anomaly_report.qmd"),
+):
+    quarto.render(
+        input=unrendered_location,
+        execute_params={
+            "summary_file": str(summary_loc.absolute()),
+            "samples_file": str(samples_loc.absolute()),
+            "disease": disease,
+        },
+    )
+
+    # Move the rendered report to the internal-review folder
+    rendered_report = unrendered_location.parent / (unrendered_location.stem + ".html")
+    rendered_report.replace(desired_output_location)
+    console.status(
+        f"Moved the rendered {disease} report to {str(desired_output_location)}"
+    )
 
 
 if __name__ == "__main__":
