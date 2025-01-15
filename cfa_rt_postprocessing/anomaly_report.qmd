@@ -40,8 +40,8 @@ from plotting.rt import plot_rt
 plt.style.use("style.mplstyle")
 
 # Do this to get rid of warning that pops up when plotting more than 20 at once.
-# They do this to help make sure you don't run out of RAM, so I added a call to 
-# plt.close() at the end to ensure we do close things up and reduce RAM once we've 
+# They do this to help make sure you don't run out of RAM, so I added a call to
+# plt.close() at the end to ensure we do close things up and reduce RAM once we've
 # plotted everything.
 matplotlib.rcParams["figure.max_open_warning"] = 52
 
