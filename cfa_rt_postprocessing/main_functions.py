@@ -353,7 +353,7 @@ def merge_and_render_anomaly(
 
     # === Clean up =====================================================================
     conn.close()
-    # rmtree(root)
+    rmtree(root)
 
 
 if __name__ == "__main__":
