@@ -28,7 +28,7 @@ jobs:
             az storage blob download \
               --account-name ${{ secrets.STORAGE_ACCOUNT_NAME }} \
               --container-name ${{ secrets.POSTPROCESS_CONTAINER_NAME }} \
-              --name latest_anomaly_report.html \
+              --name latest_anomaly_report_covid.html \
               --file downloaded-site.html \
               --auth-mode login
 
