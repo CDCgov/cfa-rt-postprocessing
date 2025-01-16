@@ -29,21 +29,22 @@ if disease == "":
 # Rt Plots
 
 ```{python}
-import matplotlib
-import matplotlib.pyplot as plt
+# import matplotlib
+# import matplotlib.pyplot as plt
+import altair as alt
 import polars as pl
 
 from plotting.rt import plot_rt
 
 
 # A nice set of defaults for the plot style
-plt.style.use("style.mplstyle")
+# plt.style.use("style.mplstyle")
 
-# Do this to get rid of warning that pops up when plotting more than 20 at once.
-# They do this to help make sure you don't run out of RAM, so I added a call to
-# plt.close() at the end to ensure we do close things up and reduce RAM once we've
-# plotted everything.
-matplotlib.rcParams["figure.max_open_warning"] = 52
+# # Do this to get rid of warning that pops up when plotting more than 20 at once.
+# # They do this to help make sure you don't run out of RAM, so I added a call to
+# # plt.close() at the end to ensure we do close things up and reduce RAM once we've
+# # plotted everything.
+# matplotlib.rcParams["figure.max_open_warning"] = 52
 
 summary = pl.read_parquet(summary_file)
 
@@ -51,9 +52,9 @@ summary = pl.read_parquet(summary_file)
 states: list[str] = summary.get_column("geo_value").unique().sort().to_list()
 
 # Plot each state
-for state in states:
-    plot_rt(summary, state, disease)
+plots = [plot_rt(summary, state, disease) for state in states]
+alt.concat(*plots, columns=2).resolve_scale(color="independent")
 
 
-plt.close()
+# plt.close()
 ```
