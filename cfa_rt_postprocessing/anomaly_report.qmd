@@ -41,5 +41,7 @@ states: list[str] = summary.get_column("geo_value").unique().sort().to_list()
 
 # Plot each state
 plots = [plot_rt(summary, state, disease) for state in states]
+# The .resolve_scale(color="independent") adds a legend to each plot, as opposed to a
+# single legend for all plots
 alt.concat(*plots, columns=2).resolve_scale(color="independent")
 ```
