@@ -1,24 +1,12 @@
-import matplotlib
-import matplotlib.axes
-import matplotlib.dates
-import matplotlib.pyplot as plt
+import altair as alt
 import polars as pl
 
 
-def plot_rt(
-    summary: pl.DataFrame, state: str, disease: str, ax=None
-) -> matplotlib.axes.Axes:
+def plot_rt(summary: pl.DataFrame, state: str, disease: str) -> alt.LayerChart:
     """
     Plot the Rt 95% width Rt estimates as a band plot, with the median as a line in the
     middle.
     """
-    # If an axis was not handed in, create one
-    if ax is None:
-        fig, ax = plt.subplots()
-    ax.set_title(f"{state}-{disease} Rt estimates")
-    ax.set_ylabel("Rt")
-    ax.set_xlabel("Date")
-
     # Filter the summary to the state, and Rt variables
     df = summary.filter(
         pl.col.geo_value.eq(state),
@@ -26,43 +14,71 @@ def plot_rt(
         pl.col("_variable").eq("Rt"),
     )
 
+    # Define an Altair color scale
+    color_scale = alt.Scale(
+        domain=["95% Width", "50% Width", "Median"],
+        range=["#1F77B4", "#1F77B4", "#1F77B4"],
+    )
+
     # Plot the median Rt estimates
     # Median is stored in the `value` column, and has duplicates for each quantile
-    med = df.filter(pl.col("_width").eq(0.5)).select(["value", "reference_date"])
-    ax.plot(med["reference_date"], med["value"], label="Median Rt")
+    med = (
+        df.filter(pl.col("_width").eq(0.5))
+        .select(["value", "reference_date"])
+        .with_columns(label=pl.lit("Median"))
+    )
+    med_line = (
+        alt.Chart(med, title=f"{state}-{disease} Rt estimates")
+        .mark_line(strokeWidth=4)
+        .encode(
+            x=alt.X("reference_date:T").title("Date"),
+            y=alt.Y("value:Q").title("Rt").scale(zero=False),
+            color=alt.Color("label:N").scale(color_scale),
+        )
+    )
 
     # Plot the 95% width of the Rt estimates
     # The 95% width has values stored in _lower and _upper columns
     # The reference_date is the same for both columns
-    width_95 = df.filter(pl.col("_width").eq(0.95)).select(
-        ["_lower", "_upper", "reference_date"]
+    width_95 = (
+        df.filter(pl.col("_width").eq(0.95))
+        .select(["_lower", "_upper", "reference_date"])
+        .with_columns(label=pl.lit("95% Width"))
     )
-    ax.fill_between(
-        width_95["reference_date"],
-        width_95["_lower"],
-        width_95["_upper"],
-        alpha=0.20,
-        label="95% width",
-        color="tab:blue",
+    width_95_band = (
+        alt.Chart(width_95)
+        .mark_errorband(opacity=0.20, color="blue")
+        .encode(
+            x="reference_date:T",
+            y=alt.Y("_lower:Q").title("").scale(zero=False),
+            y2="_upper:Q",
+            color=alt.Color("label:N").scale(color_scale),
+        )
     )
 
     # Plot the 50% width of the Rt estimates
-    width_50 = df.filter(pl.col("_width").eq(0.5)).select(
-        ["_lower", "_upper", "reference_date"]
+    width_50 = (
+        df.filter(pl.col("_width").eq(0.5))
+        .select(["_lower", "_upper", "reference_date"])
+        .with_columns(label=pl.lit("50% Width"))
     )
-    ax.fill_between(
-        width_50["reference_date"],
-        width_50["_lower"],
-        width_50["_upper"],
-        alpha=0.25,
-        label="50% width",
-        color="tab:blue",
+    width_50_band = (
+        alt.Chart(width_50)
+        .mark_errorband(opacity=0.25, color="blue")
+        .encode(
+            alt.X("reference_date:T"),
+            y=alt.Y("_lower:Q").title(""),
+            y2="_upper:Q",
+            color=alt.Color("label:N").scale(color_scale).scale(zero=False),
+        )
     )
 
-    # Change the date format to be Month name. Day
-    ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%b %d"))
+    # Create a black line at Rt = 1
+    line = (
+        alt.Chart(data=pl.DataFrame({"y": [1]}))
+        .mark_rule(color="black")
+        .encode(y="y:Q")
+    )
 
-    # Add a legend
-    ax.legend()
-
-    return ax
+    # Combine the plots
+    return line + width_95_band + width_50_band + med_line
