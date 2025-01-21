@@ -1,0 +1,47 @@
+---
+title: "Rt Anomaly Report"
+format:
+    html:
+        code-fold: true
+jupyter: python3
+---
+
+```{python}
+#| tags: [parameters]
+
+# https://quarto.org/docs/computations/parameters.html
+summary_file = ""
+samples_file = ""
+disease = ""
+```
+```{python}
+# Ensure input parameters have been handed in
+if summary_file == "":
+    raise ValueError("No paramenter handed in for summary file location")
+
+if samples_file == "":
+    raise ValueError("No paramenter handed in for samples file location")
+
+if disease == "":
+    raise ValueError("No disease paramenter handed in")
+```
+
+# Rt Plots
+
+```{python}
+import altair as alt
+import polars as pl
+
+from plotting.rt import plot_rt
+
+summary = pl.read_parquet(summary_file)
+
+# Gather the set of unique states
+states: list[str] = summary.get_column("geo_value").unique().sort().to_list()
+
+# Plot each state
+plots = [plot_rt(summary, state, disease) for state in states]
+# The .resolve_scale(color="independent") adds a legend to each plot, as opposed to a
+# single legend for all plots
+alt.concat(*plots, columns=2).resolve_scale(color="independent")
+```

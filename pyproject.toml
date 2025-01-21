@@ -3,11 +3,27 @@ name = "cfa-rt-postprocessing"
 version = "0.1.0"
 description = "For postprocessing the output of the EpiNow2 Rt pipeline."
 readme = "README.md"
-requires-python = ">=3.13"
-dependencies = []
+requires-python = ">=3.11"
+dependencies = [
+    "altair[all]>=5.5.0",
+    "azure-identity>=1.19.0",
+    "azure-storage-blob>=12.24.0",
+    "duckdb>=1.1.3",
+    "flask>=3.1.0",
+    "gunicorn>=23.0.0",
+    "numpy>=2.2.1",
+    "papermill>=2.6.0",
+    "polars>=1.16.0",
+    "pyarrow>=18.1.0",
+    "quarto>=0.1.0",
+    "quarto-cli>=1.6.40",
+    "rich>=13.9.4",
+    "typer>=0.15.1",
+    "vega-datasets>=0.9.0",
+]
 
 [dependency-groups]
-dev = ["pre-commit>=4.0.1", "pytest>=8.3.3"]
+dev = ["ipython>=8.30.0", "pre-commit>=4.0.1", "pytest>=8.3.3"]
 
 [tool.ruff]
 # This is the default in black.
