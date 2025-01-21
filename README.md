@@ -27,7 +27,6 @@ CFA's standard [schema for $R_t$ estimates]https://github.com/CDCgov/cfa-epinow2
 │   │   │   ├── metadata.json
 │   │   │   ├── stdout.log
 │   │   │   └── stderr.log
-│   ├── job_metadata.json
 ```
 
 ### Outputs
@@ -44,15 +43,6 @@ that outputs are only released after approval and publication by the team.
 <root-subdir>/               # E.g. "NSSP_Rt/EpiNow2" or "backfill-experiment"
 ├── <release-name>/          # E.g. "20241009"
 │   ├── internal-review/
-|   |   ├── job_<jobid>/     # Jobs are disease-specific in production
-|   |   |   ├── merged.csv
-|   |   |   ├── plots/
-|   |   |   |   ├── choropleth.png
-|   |   |   |   ├── lineinterval.png
-|   |   |   |   ├── timeseries/
-|   |   |   |   |   ├── <location>.png
-|   |   |   |   |   ├── <location>.png
-|   |   |   |   ├── ...
 |   |   ├── job_<jobid>/
 |   |   |   ├── merged.csv
 |   |   |   ├── plots/
@@ -61,7 +51,7 @@ that outputs are only released after approval and publication by the team.
 |   |   |   |   ├── timeseries/
 |   |   |   |   |   ├── <location>.png
 |   |   |   |   |   ├── <location>.png
-|   |   |   |   |   ├── ...
+|   |   |   |   ├── ...
 |   ├── release/
 |   |   ├── merged_release.csv
 |   |   ├── <rundate>_<disease1>_map_data.csv
