@@ -36,7 +36,7 @@ internal evalution and for publication to the [CDC website](), to
 [data.cdc.gov](), and to [DCIPHER](). By convention, the pipeline always
 generates outputs for publication, even if the input data is from an experiment,
 test run, or backfill exercise that is not intended for release. The publication
-outputs are not costly to generate and our person-driven releae process ensures
+outputs are not costly to generate and our person-driven release process ensures
 that outputs are only released after approval and publication by the team.
 
 
