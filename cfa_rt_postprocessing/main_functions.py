@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from shutil import rmtree
 
@@ -64,6 +64,7 @@ def merge_and_render_anomaly(
     release_name: str,
     min_runat: datetime,
     max_runat: datetime,
+    prod_date: date | None = None,
     rt_output_container_name: str = "nssp_rt",
     post_process_container_name: str = "nssp-rt-post-process",
     overwrite_blobs: bool = False,
@@ -188,6 +189,10 @@ def merge_and_render_anomaly(
             + ".parquet",
         )
     )
+    # Filter by the production date if provided
+    if prod_date is not None:
+        prod_runs = prod_runs.filter(pl.col.production_date.eq(prod_date))
+
     console.log(f"Found {len(prod_runs)} tasks to merge")
     # === Create the <release-name>/interal_review/<job_id>/ folders ===============
     # Get the unique job-ids
@@ -351,7 +356,10 @@ def merge_and_render_anomaly(
                     overwrite=overwrite_blobs,
                 )
             console.log(
-                f"Uploaded the covid anomaly report to {output_ctr_client.url}/{covid_report}"
+                (
+                    f"Uploaded the covid anomaly report to {output_ctr_client.url}/{covid_report}"
+                    f" and to {output_ctr_client.url}/latest_anomaly_report_covid.html"
+                )
             )
 
             # To /latest_anomaly_report_covid.html in the container

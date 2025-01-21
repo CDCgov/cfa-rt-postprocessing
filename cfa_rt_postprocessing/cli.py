@@ -24,6 +24,12 @@ def main(
             help="Maximum run UTC datetime to consider for merging. UTC tz added by script."
         ),
     ],
+    prod_date: Annotated[
+        datetime | None,
+        typer.Option(
+            help="A production date to filter on. If not passed in, not filtered by production_date"
+        ),
+    ] = None,
     rt_output_container_name: Annotated[
         str,
         typer.Option(
@@ -47,10 +53,17 @@ def main(
     # parseddatetime objects
     min_runat = min_runat.replace(tzinfo=timezone.utc)
     max_runat = max_runat.replace(tzinfo=timezone.utc)
+
+    # Typer apparently does not know how to parse a date, so we need to grab just the
+    # date portion of the prod_date datetime object
+    if prod_date is not None:
+        prod_date = prod_date.date()  # type: ignore
+
     merge_and_render_anomaly(
         release_name=release_name,
         min_runat=min_runat,
         max_runat=max_runat,
+        prod_date=prod_date,
         rt_output_container_name=rt_output_container_name,
         post_process_container_name=post_process_container_name,
         overwrite_blobs=overwrite_blobs,
