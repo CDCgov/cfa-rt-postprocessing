@@ -307,8 +307,8 @@ def merge_and_render_anomaly(
 
     # Upload the metadata df as a parquet file
     md_file = internal_review / "metadata.parquet"
+    prod_runs.write_parquet(md_file)
     try:
-        prod_runs.write_parquet(md_file)
         with md_file.open("rb") as data:
             output_ctr_client.upload_blob(
                 name=str(md_file),
