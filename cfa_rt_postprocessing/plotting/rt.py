@@ -8,24 +8,43 @@ def plot_rt(summary: pl.DataFrame, state: str, disease: str) -> alt.LayerChart:
     middle.
     """
     # Filter the summary to the state, and Rt variables
-    df = summary.filter(
-        pl.col.geo_value.eq(state),
-        pl.col.disease.eq(disease),
-        pl.col("_variable").eq("Rt"),
+    df = (
+        summary.filter(
+            pl.col.geo_value.is_in((state, "US")),
+            pl.col.disease.eq(disease),
+            pl.col("_variable").eq("Rt"),
+        )
+        # To ensure the US is always plotted underneath the value from the state, sort
+        # the table so that the US always comes first, meaning it gets plotted first,
+        # and the state gets plotted on top
+        .with_columns(is_us=pl.when(pl.col.geo_value.eq("US")).then(1).otherwise(2))
+        .sort(["is_us", "geo_value", "reference_date"])
+        .drop("is_us")
     )
 
     # Define an Altair color scale
     color_scale = alt.Scale(
-        domain=["95% Width", "50% Width", "Median"],
-        range=["#1F77B4", "#1F77B4", "#1F77B4"],
+        domain=[
+            f"{state} 95% Width",
+            f"{state} 50% Width",
+            f"{state} Median",
+            "US 95% Width",
+            "US 50% Width",
+            "US Median",
+        ],
+        range=["#1F77B4", "#1F77B4", "#1F77B4", "#767676", "#767676", "#767676"],
     )
 
     # Plot the median Rt estimates
     # Median is stored in the `value` column, and has duplicates for each quantile
     med = (
         df.filter(pl.col("_width").eq(0.5))
-        .select(["value", "reference_date"])
-        .with_columns(label=pl.lit("Median"))
+        .select(["value", "reference_date", "geo_value"])
+        .with_columns(
+            label=pl.when(pl.col.geo_value.eq("US"))
+            .then(pl.lit("US Median"))
+            .otherwise(pl.lit(f"{state} Median"))
+        )
     )
     med_line = (
         alt.Chart(med, title=f"{state}-{disease} Rt estimates")
@@ -42,8 +61,12 @@ def plot_rt(summary: pl.DataFrame, state: str, disease: str) -> alt.LayerChart:
     # The reference_date is the same for both columns
     width_95 = (
         df.filter(pl.col("_width").eq(0.95))
-        .select(["_lower", "_upper", "reference_date"])
-        .with_columns(label=pl.lit("95% Width"))
+        .select(["_lower", "_upper", "reference_date", "geo_value"])
+        .with_columns(
+            label=pl.when(pl.col.geo_value.eq("US"))
+            .then(pl.lit("US 95% Width"))
+            .otherwise(pl.lit(f"{state} 95% Width"))
+        )
     )
     width_95_band = (
         alt.Chart(width_95)
@@ -59,8 +82,12 @@ def plot_rt(summary: pl.DataFrame, state: str, disease: str) -> alt.LayerChart:
     # Plot the 50% width of the Rt estimates
     width_50 = (
         df.filter(pl.col("_width").eq(0.5))
-        .select(["_lower", "_upper", "reference_date"])
-        .with_columns(label=pl.lit("50% Width"))
+        .select(["_lower", "_upper", "reference_date", "geo_value"])
+        .with_columns(
+            label=pl.when(pl.col.geo_value.eq("US"))
+            .then(pl.lit("US 50% Width"))
+            .otherwise(pl.lit(f"{state} 50% Width"))
+        )
     )
     width_50_band = (
         alt.Chart(width_50)
