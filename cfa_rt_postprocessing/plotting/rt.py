@@ -17,11 +17,7 @@ def plot_rt(summary: pl.DataFrame, state: str, disease: str) -> alt.LayerChart:
         # To ensure the US is always plotted underneath the value from the state, sort
         # the table so that the US always comes first, meaning it gets plotted first,
         # and the state gets plotted on top
-        .with_columns(
-            is_us=pl.when(pl.col.geo_value.eq("US"))
-            .then(1)
-            .otherwise(2)
-        )
+        .with_columns(is_us=pl.when(pl.col.geo_value.eq("US")).then(1).otherwise(2))
         .sort(["is_us", "geo_value", "reference_date"])
         .drop("is_us")
     )
