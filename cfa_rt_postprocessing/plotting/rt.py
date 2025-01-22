@@ -1,8 +1,15 @@
+from datetime import date
+
 import altair as alt
 import polars as pl
 
 
-def plot_rt(summary: pl.DataFrame, state: str, disease: str) -> alt.LayerChart:
+def plot_rt(
+    summary: pl.DataFrame,
+    state: str,
+    disease: str,
+    repot_date: date,
+) -> alt.LayerChart:
     """
     Plot the Rt 95% width Rt estimates as a band plot, with the median as a line in the
     middle.
@@ -13,6 +20,7 @@ def plot_rt(summary: pl.DataFrame, state: str, disease: str) -> alt.LayerChart:
             pl.col.geo_value.is_in((state, "US")),
             pl.col.disease.eq(disease),
             pl.col("_variable").eq("Rt"),
+            pl.col.reference_date.le(repot_date),
         )
         # To ensure the US is always plotted underneath the value from the state, sort
         # the table so that the US always comes first, meaning it gets plotted first,

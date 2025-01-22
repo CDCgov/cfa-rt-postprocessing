@@ -306,9 +306,9 @@ def merge_and_render_anomaly(
         console.log(f"Failed to upload the samples: {e}")
 
     # Upload the metadata df as a parquet file
+    md_file = internal_review / "metadata.parquet"
+    prod_runs.write_parquet(md_file)
     try:
-        md_file = internal_review / "metadata.parquet"
-        prod_runs.write_parquet(md_file)
         with md_file.open("rb") as data:
             output_ctr_client.upload_blob(
                 name=str(md_file),
@@ -330,6 +330,7 @@ def merge_and_render_anomaly(
             desired_output_location=covid_report,
             summary_loc=final_summaries,
             samples_loc=final_samples,
+            metadata_file=md_file,
         )
     except Exception as e:
         console.log(f"Failed to render the COVID-19 anomaly report: {e}")
@@ -341,6 +342,7 @@ def merge_and_render_anomaly(
             desired_output_location=flu_report,
             summary_loc=final_summaries,
             samples_loc=final_samples,
+            metadata_file=md_file,
         )
     except Exception as e:
         console.log(f"Failed to render the Influenza anomaly report: {e}")
@@ -414,6 +416,7 @@ def render_report(
     desired_output_location: Path,
     summary_loc: Path,
     samples_loc: Path,
+    metadata_file: Path,
     unrendered_location: Path = Path("cfa_rt_postprocessing/anomaly_report.qmd"),
 ):
     quarto.render(
@@ -421,6 +424,7 @@ def render_report(
         execute_params={
             "summary_file": str(summary_loc.absolute()),
             "samples_file": str(samples_loc.absolute()),
+            "metadata_file": str(metadata_file.absolute()),
             "disease": disease,
         },
     )
