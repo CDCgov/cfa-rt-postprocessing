@@ -12,6 +12,7 @@ jupyter: python3
 # https://quarto.org/docs/computations/parameters.html
 summary_file = ""
 samples_file = ""
+metadata_file = ""
 disease = ""
 ```
 ```{python}
@@ -21,6 +22,9 @@ if summary_file == "":
 
 if samples_file == "":
     raise ValueError("No paramenter handed in for samples file location")
+
+if metadata_file == "":
+    raise ValueError("No paramenter handed in for metadata file location")
 
 if disease == "":
     raise ValueError("No disease paramenter handed in")
@@ -35,12 +39,20 @@ import polars as pl
 from plotting.rt import plot_rt
 
 summary = pl.read_parquet(summary_file)
+metadata = pl.read_parquet(metadata_file)
+
+# This is likely all from a single report date. Grab it, and warn if not.
+report_dates = metadata.get_column("report_date").unique()
+if len(report_dates) != 1:
+    raise ValueError("Multiple report dates found in metadata")
+
+report_date = report_dates[0]
 
 # Gather the set of unique states
 states: list[str] = summary.get_column("geo_value").unique().sort().to_list()
 
 # Plot each state
-plots = [plot_rt(summary, state, disease) for state in states]
+plots = [plot_rt(summary, state, disease, report_date) for state in states]
 # The .resolve_scale(color="independent") adds a legend to each plot, as opposed to a
 # single legend for all plots
 alt.concat(*plots, columns=2).resolve_scale(color="independent")
