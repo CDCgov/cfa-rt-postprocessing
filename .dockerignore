@@ -1,0 +1,8 @@
+# Ignore any parquet files, they are almost certainly there from local testing
+*.parquet
+
+# Ignore anything in any ./**/internal-review/ folders
+**/internal-review/
+
+# Ignore the .env file
+.env
