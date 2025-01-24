@@ -57,7 +57,7 @@ if len(report_dates) != 1:
 
 report_date = report_dates[0]
 
-bsc = BlobServiceClient(AzureStorage.AZURE_STORAGE_ACCOUNT_URL, 
+bsc = BlobServiceClient(AzureStorage.AZURE_STORAGE_ACCOUNT_URL,
 credential=DefaultAzureCredential())
 
 obs_plot_data,interval_plot_data  = prepare_plot_data(report_date,bsc=bsc)

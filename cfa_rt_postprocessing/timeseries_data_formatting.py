@@ -1,12 +1,32 @@
 from datetime import date, timedelta
 from io import BytesIO
+
 import polars as pl
+from azure.storage.blob import BlobServiceClient
 from azure.storage.blob._container_client import ContainerClient
-import polars.selectors as cs
 
 
 # Reads files straight from blob (not read a local downloaded version)
-def read_blob_file(container_name, blob_file_path, blob_service_client):
+def read_blob_file(
+    container_name: str, blob_file_path: str, blob_service_client: BlobServiceClient
+):
+    """
+    Reads a single parquet file from blob into memory
+
+    Parameters
+    ----------
+    container_name: str
+        name of the container (EX: "nssp-rt-post-process")
+    blob_file_path: str
+        name of the blob  (EX: "2025-01-17/internal-review/summaries.parquet")
+    blob_service_client: BlobServiceClient
+        BlobServiceClient object
+
+    Returns
+    -------
+    polars.dataframe
+        File read from blob
+    """
     input_container: ContainerClient = blob_service_client.get_container_client(
         container_name
     )
@@ -18,7 +38,24 @@ def read_blob_file(container_name, blob_file_path, blob_service_client):
     return df
 
 
-def gold_data_formatting(gold_df, value_name, date_cut_off):
+def gold_data_formatting(gold_df: pl, value_name: str, date_cut_off: date):
+    """
+    Function to format a nssp gold dataset (rename columns, cast to string, select diseases, etc)
+
+    Parameters
+    ----------
+    gold_df : pl
+        gold data as polar dataframe
+    value_name: str
+        what to rename the value column to (EX: "raw_data versus" "raw_data_prev_wk")
+    date_cut_off: date
+        min date for plots to come (8 weeks before report_date)
+
+    Returns
+    -------
+    polars.dataframe
+        processed gold data
+    """
     nssp_gold = (
         gold_df.filter(pl.col("metric") == "count_ed_visits")
         .with_columns(
@@ -48,10 +85,25 @@ def gold_data_formatting(gold_df, value_name, date_cut_off):
     return healthdata_df_agg
 
 
-def combine_gold_current_and_prev(date_to_use : date,
-                                  blob_service_client):
+def combine_gold_current_and_prev(
+    date_to_use: date, blob_service_client: BlobServiceClient
+):
+    """
+    Read in current and previous gold files with read_blob_file(). Format each with gold_data_formatting(). Merge them together, create an aggregate US version. Merge back together
+
+    Parameters
+    ----------
+    blob_service_client: BlobServiceClient
+        BlobServiceClient object
+    date_to_use: date
+        report date
+
+    Returns
+    -------
+    polars.dataframe
+        merged gold data (current date and week prior)
+    """
     past_week = date_to_use - timedelta(days=7)
-    start_date = date_to_use - timedelta(weeks=24)  ###
     date_cut_off = date_to_use - timedelta(weeks=8)
     # read the gold files (same date as summaries.parquet and week prior)
     nssp_gold = read_blob_file(
@@ -83,15 +135,16 @@ def combine_gold_current_and_prev(date_to_use : date,
     )
     # Create US data by summarizing across all states and then adding 'US' as a state
     us_df_agg = (
-        healthdata_df_agg_join
-        .filter(pl.col("geo_value") != "US")  # Exclude existing 'US' rows if any
+        healthdata_df_agg_join.filter(
+            pl.col("geo_value") != "US"
+        )  # Exclude existing 'US' rows if any
+        .with_columns(pl.lit("US").alias("geo_value"))
         .group_by(["reference_date", "geo_value", "disease"])
         .agg(
             pl.col("raw_obs_data").sum().alias("raw_obs_data"),
-            pl.col("raw_obs_data_prev_wk").sum().alias("raw_obs_data_prev_wk")
-            )
-        .with_columns(pl.lit("US").alias("geo_value"))
-        #.select(["reference_date","geo_value","disease","value"])
+            pl.col("raw_obs_data_prev_wk").sum().alias("raw_obs_data_prev_wk"),
+        )
+        # .select(["reference_date","geo_value","disease","value"])
     )
     # Combine health data with US data
     healthdata_df_combined = pl.concat([healthdata_df_agg_join, us_df_agg])
@@ -99,19 +152,38 @@ def combine_gold_current_and_prev(date_to_use : date,
 
 
 def read_and_process_summary_data(
-    date_to_use,
-    blob_service_client,
-    variable_values=(
+    date_to_use: date,
+    blob_service_client: BlobServiceClient,
+    variable_values: tuple = (
         "processed_obs_data",
         "expected_nowcast_cases",
-        "expected_obs_cases")
-    ):
+        "expected_obs_cases",
+    ),
+):
+    """
+    Read summaries.parquet with read_blob_file() and then reformat and pivot the data
+
+    Parameters
+    ----------
+    blob_service_client: BlobServiceClient
+        BlobServiceClient object
+    date_to_use: date
+        report date
+    variable_values: tuple
+        list of the _variable values to pivot over into columns
+
+    Returns
+    -------
+    polars.dataframe
+        processed and pivoted summaries data
+    """
     # Read the summaries parquet file
     summary_df = read_blob_file(
         blob_service_client=blob_service_client,
         container_name="nssp-rt-post-process",
         blob_file_path=date_to_use.strftime("%Y-%m-%d")
-        + "/internal-review/summaries.parquet")
+        + "/internal-review/summaries.parquet",
+    )
     summary_pivot = (
         summary_df.filter(pl.col("_variable").is_in(variable_values))
         .pivot(
@@ -132,7 +204,22 @@ def read_and_process_summary_data(
     return summary_pivot
 
 
-def process_obs_plot_data(merged_gold_dfs, summary_df):
+def process_obs_plot_data(merged_gold_dfs: pl, summary_df: pl):
+    """
+    Create observation dataframe using both gold and summary datasets
+
+    Parameters
+    ----------
+    merged_gold_dfs: pl
+        merged gold data (today's + last week's)
+    summary_df: pl
+        reformatted summary data
+
+    Returns
+    -------
+    polars.dataframe
+        observation data from both gold and summaries
+    """
     raw_processed_obs = merged_gold_dfs.join(
         (
             summary_df.group_by(["time", "reference_date", "geo_value", "disease"]).agg(
@@ -149,7 +236,22 @@ def process_obs_plot_data(merged_gold_dfs, summary_df):
     return raw_processed_obs
 
 
-def process_interval_plot_data(raw_processed_obs, summary_df):
+def process_interval_plot_data(raw_processed_obs: pl, summary_df: pl):
+    """
+    Create dataset with interval data using raw_processed_obs and summary_df
+
+    Parameters
+    ----------
+    raw_processed_obs: pl
+        processed observation data
+    summary_df: pl
+        reformatted summary data
+
+    Returns
+    -------
+    polars.dataframe
+        interval dataframe
+    """
     intervals_modeled_obs = summary_df.filter(
         pl.col("processed_obs_data").is_null(),
         pl.col("reference_date") <= max(raw_processed_obs["reference_date"]),
@@ -157,12 +259,26 @@ def process_interval_plot_data(raw_processed_obs, summary_df):
     return intervals_modeled_obs
 
 
-def prepare_plot_data(date_to_use,
-                      bsc):
-    gold_combined = combine_gold_current_and_prev(date_to_use, 
-                                                  blob_service_client=bsc)
-    summary_pivot = read_and_process_summary_data(date_to_use=date_to_use,
-                                                  blob_service_client=bsc)
+def prepare_plot_data(date_to_use: date, bsc: BlobServiceClient):
+    """
+    Plotting funtion that combines all previous functions to read and generate gold_combined data as well as summary_pivot data and then generate final plotting datasets
+
+    Parameters
+    ----------
+    blob_service_client: BlobServiceClient
+        BlobServiceClient object
+    date_to_use: date
+        report date
+
+    Returns
+    -------
+    polars.dataframes
+        two datasets: one for observation data and one for interval
+    """
+    gold_combined = combine_gold_current_and_prev(date_to_use, blob_service_client=bsc)
+    summary_pivot = read_and_process_summary_data(
+        date_to_use=date_to_use, blob_service_client=bsc
+    )
 
     obs_plot_data = process_obs_plot_data(
         merged_gold_dfs=gold_combined, summary_df=summary_pivot
@@ -175,10 +291,6 @@ def prepare_plot_data(date_to_use,
 
 if __name__ == "__main__":
     # Some sample inputs for testing. Need to move something like this to an actual test
-    args = {
-        "date_to_use": "2025-01-22"
-    }
+    args = {"date_to_use": "2025-01-22"}
     obs_plot_data = prepare_plot_data(date_to_use=args)[0]
     interval_plot_data = prepare_plot_data(date_to_use=args)[1]
-    
-    

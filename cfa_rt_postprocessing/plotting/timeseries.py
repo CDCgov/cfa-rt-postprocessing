@@ -2,7 +2,27 @@ import plotly.graph_objs as go
 import polars as pl
 
 
-def timeseries_plot(state, pathogen, obs_plot_data, interval_plot_data):
+def timeseries_plot(
+    state: str, pathogen: str, obs_plot_data: pl, interval_plot_data: pl
+):
+    """
+    Read in plotting datasets and create plotly visual for single state
+
+    Parameters
+    ----------
+    state: str
+        string upper case abbreviation for state (EX: "US")
+    pathogen: str
+        string pathogen value (EX: "Influenza")
+    obs_plot_data: pl
+        polar dataframe for observatino counts (including estimated)
+    interval_plot_data: pl
+        polar dataframe for estimated intervals
+
+    Returns
+    -------
+    plotly fig object
+    """
     df_obs = (
         obs_plot_data.filter(
             pl.col("geo_value") == state, pl.col("disease") == pathogen
