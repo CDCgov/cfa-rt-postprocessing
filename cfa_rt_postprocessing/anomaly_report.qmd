@@ -3,6 +3,9 @@ title: "Rt Anomaly Report"
 format:
     html:
         code-fold: true
+        # Use this to include all the CSS stuff in the single HTML file, as opposed to
+        # having it in a folder that gets lost when we copy the output HTML file.
+        embed-resources: true
 jupyter: python3
 ---
 
@@ -69,7 +72,7 @@ obs_plot_data, interval_plot_data = prepare_plot_data(
 # Gather the set of unique states
 states: list[str] = summary.get_column("geo_value").unique().sort().to_list()
 
-# Plot each state
+# Create the plots for each state
 rt_plots: list[alt.LayerChart] = [plot_rt(summary, state, disease, report_date) for state in states]
 timeseries_plots: list[go.Figure] = [
     timeseries_plot(
@@ -80,12 +83,18 @@ timeseries_plots: list[go.Figure] = [
     )
     for state in states
 ]
-for timeseries in timeseries_plots:
-    timeseries.show()
 
+assert len(rt_plots) == len(timeseries_plots)
 ```
 
 
 ```{python}
-alt.concat(*rt_plots, columns=2).resolve_scale(color="independent")
+#| layout: [[75, 25]]
+# The above means split each row (the rt and timeseries plots) 75% and 25% respectively.
+
+# Need to use a combination of the `#| layout` property and setting the width of the rt
+# plots here, and the width of the timeseries plots in the timeseries_plot() function.
+for timeseries, rt in zip(timeseries_plots, rt_plots):
+    timeseries.show()
+    rt.properties(width=250, height=500).show()
 ```
