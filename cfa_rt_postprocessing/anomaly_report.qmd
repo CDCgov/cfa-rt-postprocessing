@@ -72,10 +72,20 @@ states: list[str] = summary.get_column("geo_value").unique().sort().to_list()
 # Plot each state
 rt_plots: list[alt.LayerChart] = [plot_rt(summary, state, disease, report_date) for state in states]
 timeseries_plots: list[go.Figure] = [
-    timeseries_plot(obs_plot_data=obs_plot_data, interval_plot_data=interval_plot_data, state=state, pathogen=disease)
+    timeseries_plot(
+        state=state,
+        disease=disease,
+        obs_plot_data=obs_plot_data,
+        interval_plot_data=interval_plot_data,
+    )
     for state in states
 ]
 for timeseries in timeseries_plots:
     timeseries.show()
 
+```
+
+
+```{python}
+alt.concat(*rt_plots, columns=2).resolve_scale(color="independent")
 ```
