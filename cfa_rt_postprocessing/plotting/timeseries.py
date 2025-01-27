@@ -1,10 +1,15 @@
+from typing import Literal
+
 import plotly.graph_objs as go
 import polars as pl
 
 
 def timeseries_plot(
-    state: str, pathogen: str, obs_plot_data: pl, interval_plot_data: pl
-):
+    state: str,
+    disease: Literal["COVID-19", "Influenza"],
+    obs_plot_data: pl.DataFrame,
+    interval_plot_data: pl.DataFrame,
+) -> go.Figure:
     """
     Read in plotting datasets and create plotly visual for single state
 
@@ -12,21 +17,19 @@ def timeseries_plot(
     ----------
     state: str
         string upper case abbreviation for state (EX: "US")
-    pathogen: str
-        string pathogen value (EX: "Influenza")
+    disease: str
+        string disease value (EX: "Influenza")
     obs_plot_data: pl
-        polar dataframe for observatino counts (including estimated)
+        polars dataframe for observation counts (including estimated)
     interval_plot_data: pl
-        polar dataframe for estimated intervals
+        polars dataframe for estimated intervals
 
     Returns
     -------
     plotly fig object
     """
     df_obs = (
-        obs_plot_data.filter(
-            pl.col("geo_value") == state, pl.col("disease") == pathogen
-        )
+        obs_plot_data.filter(pl.col("geo_value") == state, pl.col("disease") == disease)
         .select(
             [
                 "reference_date",
@@ -42,7 +45,7 @@ def timeseries_plot(
         .sort(["reference_date"])
     )
     df_interval = interval_plot_data.filter(
-        pl.col("geo_value") == state, pl.col("disease") == pathogen
+        pl.col("geo_value") == state, pl.col("disease") == disease
     ).sort(["reference_date"])
 
     # Line Traces
@@ -83,6 +86,7 @@ def timeseries_plot(
         y=df_obs["raw_obs_data_prev_wk"],
         mode="markers",
         name="Raw Reported (Prev Week)",
+        # A red cross
         marker=dict(symbol="cross", color="rgba(255, 0, 0, 0.8)", size=5),
     )
 
@@ -109,15 +113,14 @@ def timeseries_plot(
                 y=group_data["_upper_expected_nowcast_cases"].to_list()
                 + group_data["_lower_expected_nowcast_cases"].to_list()[::-1],
                 fill="toself",
-                fillcolor="rgba(75, 63, 63, 0.1)",
-                line=dict(color="rgba(151, 127, 105, 0.05)"),
+                fillcolor="rgba(75, 63, 63, 0.1)",  # light gray
+                line=dict(color="rgba(151, 127, 105, 0.05)"),  # nearly white
                 name="Est. Total Interval: " + str(group),
             )
         )
-    # Define background color according to pathogen
-    if pathogen == "COVID-19":
+    # Define background color according to disease
+    if disease == "COVID-19":
         fig.update_layout(
-            # paper_bgcolor='rgba(255, 255, 255, 0.2)',  # Sets the color of the paper (area outside the plot)
             plot_bgcolor="rgb(235, 229, 229)",  # Sets the color of the plot area
             legend=dict(
                 bgcolor="rgba(226, 225, 225, 0.6)", bordercolor="Black", borderwidth=1
@@ -125,7 +128,6 @@ def timeseries_plot(
         )
     else:
         fig.update_layout(
-            # paper_bgcolor='rgba(255, 255, 255, 0.2)',  # Sets the color of the paper (area outside the plot)
             plot_bgcolor="rgba(107, 174, 214, 0.2)",  # Sets the color of the plot area
             legend=dict(
                 bgcolor="rgba(107, 174, 214, 0.1)", bordercolor="Black", borderwidth=1
@@ -133,7 +135,7 @@ def timeseries_plot(
         )
 
     # Update the title
-    fig.update_layout(title=state + ": " + pathogen + " ED Visits")
+    fig.update_layout(title=state + ": " + disease + " ED Visits")
     # Update the x-axis title
     fig.update_xaxes(title_text="Reference Date")
     # Update the y-axis title
