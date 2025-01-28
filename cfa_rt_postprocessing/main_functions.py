@@ -415,6 +415,30 @@ def merge_and_render_anomaly(
     p_growing.write_parquet(p_growing_pq_file)
     p_growing.write_csv(p_growing_csv_file)
 
+    # Upload the files
+    try:
+        with p_growing_pq_file.open("rb") as data:
+            output_ctr_client.upload_blob(
+                name=str(p_growing_pq_file),
+                data=data,
+                overwrite=overwrite_blobs,
+            )
+            console.log(
+                f"Uploaded the p_growing parquet to {output_ctr_client.url}/{p_growing_pq_file}"
+            )
+
+        with p_growing_csv_file.open("rb") as data:
+            output_ctr_client.upload_blob(
+                name=str(p_growing_csv_file),
+                data=data,
+                overwrite=overwrite_blobs,
+            )
+            console.log(
+                f"Uploaded the p_growing csv to {output_ctr_client.url}/{p_growing_csv_file}"
+            )
+    except Exception as e:
+        console.log(f"Failed to upload the p_growing files: {e}")
+
     # === Clean up =====================================================================
     conn.close()
     console.log(f"Cleaning up {root} folder")
