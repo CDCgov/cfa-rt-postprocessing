@@ -257,6 +257,7 @@ def process_interval_plot_data(
         interval dataframe
     """
     intervals_modeled_obs = summary_df.filter(
+        # This filters to just the rows representing a width
         pl.col("processed_obs_data").is_null(),
         pl.col("reference_date").le(
             raw_processed_obs.get_column("reference_date").max()
