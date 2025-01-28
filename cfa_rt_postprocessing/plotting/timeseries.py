@@ -101,7 +101,7 @@ def timeseries_plot(
 
     # Create a figure with the collected traces
     fig = go.Figure(
-        data=traces, layout=go.Layout(autosize=False, width=800, height=500)
+        data=traces, layout=go.Layout(autosize=False, width=700, height=500)
     )
 
     # Loop through each width group to add ribbon traces

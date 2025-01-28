@@ -6,6 +6,8 @@ format:
         # Use this to include all the CSS stuff in the single HTML file, as opposed to
         # having it in a folder that gets lost when we copy the output HTML file.
         embed-resources: true
+        # To allow for wider plots
+        page-layout: full
 jupyter: python3
 ---
 
@@ -89,12 +91,12 @@ assert len(rt_plots) == len(timeseries_plots)
 
 
 ```{python}
-#| layout: [[75, 25]]
+#| layout: [[65, 35]]
 # The above means split each row (the rt and timeseries plots) 75% and 25% respectively.
 
 # Need to use a combination of the `#| layout` property and setting the width of the rt
 # plots here, and the width of the timeseries plots in the timeseries_plot() function.
 for timeseries, rt in zip(timeseries_plots, rt_plots):
     timeseries.show()
-    rt.properties(width=250, height=500).show()
+    rt.properties(width=500, height=500).show()
 ```
