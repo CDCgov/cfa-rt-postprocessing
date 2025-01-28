@@ -481,7 +481,7 @@ def calculate_categories(samples_file: Path) -> pl.DataFrame:
     - disease
     - reference_date
     - p_growing
-    - category
+    - five_cat_p_growing
 
     The samples file is fairly large, so use duckdb to help things go faster and more
     efficiently.
