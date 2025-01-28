@@ -113,6 +113,7 @@ def timeseries_plot(
                 xanchor="center",
                 x=0.5,
             ),
+            template="plotly_white",
         ),
     )
 
@@ -131,21 +132,6 @@ def timeseries_plot(
                 line=dict(color="rgba(151, 127, 105, 0.05)"),  # nearly white
                 name="Est. Total Interval: " + str(group),
             )
-        )
-    # Define background color according to disease
-    if disease == "COVID-19":
-        fig.update_layout(
-            plot_bgcolor="rgb(235, 229, 229)",  # Sets the color of the plot area
-            legend=dict(
-                bgcolor="rgba(226, 225, 225, 0.6)", bordercolor="Black", borderwidth=1
-            ),
-        )
-    else:
-        fig.update_layout(
-            plot_bgcolor="rgba(107, 174, 214, 0.2)",  # Sets the color of the plot area
-            legend=dict(
-                bgcolor="rgba(107, 174, 214, 0.1)", bordercolor="Black", borderwidth=1
-            ),
         )
 
     # Update the title
