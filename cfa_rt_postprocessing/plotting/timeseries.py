@@ -70,7 +70,7 @@ def timeseries_plot(
         x=df_obs["reference_date"],
         y=df_obs["processed_obs_data"],
         mode="markers",
-        name="Processed Reported",
+        name="Model input reported",
         marker=dict(symbol="circle"),
         visible="legendonly",
     )
