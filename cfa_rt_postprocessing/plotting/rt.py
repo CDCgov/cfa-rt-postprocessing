@@ -116,4 +116,6 @@ def plot_rt(
     )
 
     # Combine the plots
-    return line + width_95_band + width_50_band + med_line
+    return (line + width_95_band + width_50_band + med_line).configure_legend(
+        orient="bottom"
+    )
