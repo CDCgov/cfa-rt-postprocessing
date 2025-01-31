@@ -1,4 +1,5 @@
 from datetime import date, datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from shutil import rmtree
 
@@ -69,6 +70,7 @@ def merge_and_render_anomaly(
     rt_output_container_name: str = "nssp_rt",
     post_process_container_name: str = "nssp-rt-post-process",
     overwrite_blobs: bool = False,
+    is_prod_run: bool = False,
 ):
     """
     Merge multiple task sample and summary files within a specified time range.
@@ -440,6 +442,52 @@ def merge_and_render_anomaly(
             )
     except Exception as e:
         console.log(f"Failed to upload the p_growing files: {e}")
+
+    # === Update the production index ==================================================
+    if is_prod_run:
+        # Download the production index
+        csv_bytes_io = BytesIO(
+            output_ctr_client.download_blob("/production_index.csv").readall()
+        )
+        production_index = pl.read_csv(csv_bytes_io).lazy()
+
+        # Get the production week and date
+        production_week = None
+
+        # Get this from the metadata. There should only be one unique production date.
+        prod_dates: list[date] = (
+            prod_runs.get_column("production_date").unique().to_list()
+        )
+        if len(prod_dates) != 1:
+            console.log(
+                f"More than one unique production date found: {prod_dates}. Using the first one."
+            )
+
+        production_date: date = prod_dates[0]
+
+        # Update it
+        new_production_index: pl.DataFrame = update_production_index(
+            production_index=production_index,
+            production_week=production_week,
+            production_date=production_date,
+        ).collect()
+
+        # Write it to CSV
+        new_production_index.write_csv(internal_review / "production_index.csv")
+
+        # Upload it
+        try:
+            with (internal_review / "production_index.csv").open("rb") as data:
+                output_ctr_client.upload_blob(
+                    name="production_index.csv",
+                    data=data,
+                    overwrite=overwrite_blobs,
+                )
+            console.log(
+                f"Uploaded the production index to {output_ctr_client.url}/production_index.csv"
+            )
+        except Exception as e:
+            console.log(f"Failed to upload the production index: {e}")
 
     # === Clean up =====================================================================
     conn.close()

@@ -49,6 +49,15 @@ def main(
             help="Whether to overwrite the blobs in the post process container",
         ),
     ] = True,
+    is_prod_run: Annotated[
+        bool,
+        typer.Option(
+            help=(
+                "Whether this is a production run or not. If it is a production run, the "
+                "production_index.csv file will be updated."
+            ),
+        ),
+    ] = False,
 ):
     # Add UTC timezone to min_runat and max_runat. Typer cannot add timezone info to
     # parseddatetime objects
@@ -68,6 +77,7 @@ def main(
         rt_output_container_name=rt_output_container_name,
         post_process_container_name=post_process_container_name,
         overwrite_blobs=overwrite_blobs,
+        is_prod_run=is_prod_run,
     )
 
 
