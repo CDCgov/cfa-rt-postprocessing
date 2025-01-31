@@ -12,7 +12,7 @@ from azure.storage.blob._container_client import ContainerClient
 from rich.console import Console
 from rich.progress import track
 
-from .azure_constants import AzureStorage
+from src.cfa_rt_postprocessing.azure_constants import AzureStorage
 
 console = Console()
 
