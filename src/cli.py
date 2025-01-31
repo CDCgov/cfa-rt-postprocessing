@@ -48,7 +48,7 @@ def main(
         typer.Option(
             help="Whether to overwrite the blobs in the post process container",
         ),
-    ] = False,
+    ] = True,
 ):
     # Add UTC timezone to min_runat and max_runat. Typer cannot add timezone info to
     # parseddatetime objects
