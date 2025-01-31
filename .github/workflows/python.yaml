@@ -30,5 +30,3 @@ jobs:
       # For example, using `pytest`
       run: uv run pytest
 
-    - name: Minimize uv cache
-      run: uv cache prune --ci
