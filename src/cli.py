@@ -69,6 +69,12 @@ def main(
     if prod_date is not None:
         prod_date = prod_date.date()  # type: ignore
 
+    # If this is a prod_run, make sure that overwrite_blobs is set to True
+    if is_prod_run and not overwrite_blobs:
+        raise typer.BadParameter(
+            "If this is a production run, the --overwrite-blobs flag must be set to True"
+        )
+
     merge_and_render_anomaly(
         release_name=release_name,
         min_runat=min_runat,
