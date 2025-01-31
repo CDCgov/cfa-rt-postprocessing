@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
 from shutil import rmtree
@@ -452,7 +452,7 @@ def merge_and_render_anomaly(
         production_index = pl.read_csv(csv_bytes_io).lazy()
 
         # Get the production week and date
-        production_week = None
+        production_week = round_up_to_friday(date.today())
 
         # Get this from the metadata. There should only be one unique production date.
         prod_dates: list[date] = (
@@ -611,6 +611,24 @@ def update_production_index(
     return production_index.update(
         other=new_row, on="production_week", how="full"
     ).sort("production_week")
+
+
+def round_up_to_friday(d: date) -> date:
+    """
+    Round a date up to the next Friday.
+
+    Parameters
+    ----------
+    d : date
+        The date to round up to the next Friday.
+
+    Returns
+    -------
+    date
+        The next Friday after the input date.
+    """
+
+    return d + timedelta(days=(4 - d.weekday()) % 7)
 
 
 if __name__ == "__main__":
