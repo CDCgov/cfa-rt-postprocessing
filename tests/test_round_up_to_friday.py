@@ -1,4 +1,5 @@
 from datetime import date
+
 import pytest
 
 from src.cfa_rt_postprocessing.main_functions import round_up_to_friday
