@@ -8,9 +8,10 @@ import quarto
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 from azure.storage.blob._container_client import ContainerClient
-from azure_constants import AzureStorage
 from rich.console import Console
 from rich.progress import track
+
+from cfa_rt_postprocessing.azure_constants import AzureStorage
 
 console = Console()
 
@@ -518,6 +519,49 @@ def calculate_categories(samples_file: Path) -> pl.DataFrame:
     conn.close()
 
     return p_growing
+
+
+def update_production_index(
+    production_index: pl.LazyFrame, production_week: date, production_date: date
+) -> pl.LazyFrame:
+    """
+    Update or add a row in the production index.
+
+    Parameters
+    ----------
+    production_index : pl.LazyFrame
+        The current production index LazyFrame containing production_week and
+        production_date columns
+    production_week : date
+        The production week to update or add
+    production_date : date
+        The production date to associate with the production week
+
+    Returns
+    -------
+    pl.LazyFrame
+        Updated production index with either modified production date for existing
+        production week or new row added
+
+    Notes
+    -----
+    Taking in the current state of the production index, update it with a run.
+    If the production_week is already in the index, update the production_date for that
+    row. If not, add a new row.
+    """
+    # Create the new row
+    new_row = pl.LazyFrame(
+        dict(production_week=[production_week], production_date=[production_date])
+    )
+
+    # Perform the update. Using `how="full"`, if this production week is already in the
+    # index then it will be update "in place", otherwise a new row will be added.
+    # Sort by production_week to ensure that the output is in the same order as the
+    # input. Local testing has shown that sorting is sometimes necessary to keep the
+    # order correct.
+    return production_index.update(
+        other=new_row, on="production_week", how="full"
+    ).sort("production_week")
 
 
 if __name__ == "__main__":
