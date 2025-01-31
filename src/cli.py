@@ -1,9 +1,12 @@
 from datetime import datetime, timezone
 
 import typer
+from rich.console import Console
 from typing_extensions import Annotated
 
 from cfa_rt_postprocessing.main_functions import merge_and_render_anomaly
+
+console = Console()
 
 
 def main(
@@ -73,6 +76,12 @@ def main(
     if is_prod_run and not overwrite_blobs:
         raise typer.BadParameter(
             "If this is a production run, the --overwrite-blobs flag must be set to True"
+        )
+
+    # Warn the user that they are doing a production run
+    if is_prod_run:
+        console.log(
+            "This is a production run. The production_index.csv file will be updated."
         )
 
     merge_and_render_anomaly(
