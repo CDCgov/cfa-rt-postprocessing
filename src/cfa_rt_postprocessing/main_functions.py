@@ -447,9 +447,17 @@ def merge_and_render_anomaly(
     if is_prod_run:
         # Download the production index
         csv_bytes_io = BytesIO(
-            output_ctr_client.download_blob("/production_index.csv").readall()
+            output_ctr_client.download_blob("production_index.csv").readall()
         )
-        production_index = pl.read_csv(csv_bytes_io).lazy()
+        production_index = pl.read_csv(
+            csv_bytes_io,
+            schema=pl.Schema(
+                [
+                    ("production_week", pl.Date),
+                    ("production_date", pl.Date),
+                ]
+            ),
+        ).lazy()
 
         # Get the production week and date
         production_week = round_up_to_friday(date.today())
