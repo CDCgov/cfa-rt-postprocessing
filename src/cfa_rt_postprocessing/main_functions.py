@@ -11,7 +11,7 @@ from azure.storage.blob._container_client import ContainerClient
 from rich.console import Console
 from rich.progress import track
 
-from cfa_rt_postprocessing.azure_constants import AzureStorage
+from .azure_constants import AzureStorage
 
 console = Console()
 
@@ -152,6 +152,7 @@ def merge_and_render_anomaly(
         and (b.creation_time >= min_runat)
         and (b.creation_time <= max_runat)
     ]
+    console.status(f"Found {len(metadata_files)} metadata files")
     # Download the metadata files into the internal-review folder
     for mf in track(metadata_files, description="Downloading metadata files"):
         to_write = meta / mf
@@ -452,7 +453,7 @@ def render_report(
     summary_loc: Path,
     samples_loc: Path,
     metadata_file: Path,
-    unrendered_location: Path = Path("cfa_rt_postprocessing/anomaly_report.qmd"),
+    unrendered_location: Path = Path("src/cfa_rt_postprocessing/anomaly_report.qmd"),
 ):
     quarto.render(
         input=unrendered_location,

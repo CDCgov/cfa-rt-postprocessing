@@ -4,7 +4,7 @@ import polars as pl
 import polars.testing
 import pytest
 
-from cfa_rt_postprocessing.main_functions import update_production_index
+from src.cfa_rt_postprocessing.main_functions import update_production_index
 
 
 def test_schema_and_types():
