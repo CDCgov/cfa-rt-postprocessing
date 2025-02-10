@@ -1,3 +1,4 @@
+import warnings
 from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
@@ -9,6 +10,7 @@ import quarto
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 from azure.storage.blob._container_client import ContainerClient
+from azure.storage.blob._models import BlobProperties
 from rich.console import Console
 from rich.progress import track
 
@@ -445,54 +447,74 @@ def merge_and_render_anomaly(
 
     # === Update the production index ==================================================
     if is_prod_run:
+        # Get the production index blobs
+        prod_idx_blobs: list[BlobProperties] = [
+            b
+            for b in output_ctr_client.list_blobs()
+            if b.name.startswith("production_index") and b.name.endswith(".csv")
+        ]
+        console.log(f"Found {len(prod_idx_blobs)} production index files")
+        # Find the most recent one
+        most_recent_prod_idx: BlobProperties = max(
+            prod_idx_blobs, key=lambda x: x.creation_time
+        )
+        console.log(f"Using most recent production index: {most_recent_prod_idx.name}")
+
         # Download the production index
         csv_bytes_io = BytesIO(
-            output_ctr_client.download_blob("production_index.csv").readall()
+            output_ctr_client.download_blob(most_recent_prod_idx.name).readall()
         )
         production_index = pl.read_csv(
             csv_bytes_io,
             schema=pl.Schema(
                 [
-                    ("production_week", pl.Date),
-                    ("production_date", pl.Date),
+                    ("release_date", pl.Date),
+                    ("run_date", pl.Date),
                 ]
             ),
         ).lazy()
 
-        # Get the production week and date
-        production_week = round_up_to_friday(date.today())
+        # Get the release date
+        release_date: date = round_up_to_friday(date.today())
 
-        # Get this from the metadata. There should only be one unique production date.
-        prod_dates: list[date] = (
-            prod_runs.get_column("production_date").unique().to_list()
+        # Get this from the metadata. There should only be one unique run_at date
+        # from all of these tasks
+        run_dates: list[date] = (
+            prod_runs.get_column("run_at").dt.date().unique().to_list()
         )
-        if len(prod_dates) != 1:
-            console.log(
-                f"More than one unique production date found: {prod_dates}. Using the first one."
+        if len(run_dates) != 1:
+            # Warn the user that there was more than one run date. Note that in the
+            # metadata from the model, `production_date` is what we are calling `run_date`
+            # in the production index.
+            warnings.warn(
+                f"More than one unique run date found: {run_dates}. Using the first one."
             )
 
-        production_date: date = prod_dates[0]
+        run_date: date = run_dates[0]
 
         # Update it
         new_production_index: pl.DataFrame = update_production_index(
             production_index=production_index,
-            production_week=production_week,
-            production_date=production_date,
+            release_date=release_date,
+            run_date=run_date,
         ).collect()
 
-        # Write it to CSV
-        new_production_index.write_csv(internal_review / "production_index.csv")
+        # Write it to CSV, using timestamp up to the current second as the name
+        now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        new_prod_idx_file = internal_review / "production_index" / f"{now}.csv"
+        new_prod_idx_file.parent.mkdir(parents=True, exist_ok=True)
+        new_production_index.write_csv(new_prod_idx_file)
 
         # Upload it
         try:
-            with (internal_review / "production_index.csv").open("rb") as data:
+            with new_prod_idx_file.open("rb") as data:
                 output_ctr_client.upload_blob(
-                    name="production_index.csv",
+                    name=f"production_index/{now}.csv",
                     data=data,
-                    overwrite=overwrite_blobs,
+                    overwrite=False,
                 )
             console.log(
-                f"Uploaded the production index to {output_ctr_client.url}/production_index.csv"
+                f"Uploaded the production index to {output_ctr_client.url}/production_index/{now}.csv"
             )
         except Exception as e:
             console.log(f"Failed to upload the production index: {e}")
@@ -579,7 +601,7 @@ def calculate_categories(samples_file: Path) -> pl.DataFrame:
 
 
 def update_production_index(
-    production_index: pl.LazyFrame, production_week: date, production_date: date
+    production_index: pl.LazyFrame, release_date: date, run_date: date
 ) -> pl.LazyFrame:
     """
     Update or add a row in the production index.
@@ -587,38 +609,36 @@ def update_production_index(
     Parameters
     ----------
     production_index : pl.LazyFrame
-        The current production index LazyFrame containing production_week and
-        production_date columns
-    production_week : date
-        The production week to update or add
-    production_date : date
-        The production date to associate with the production week
+        The current production index LazyFrame containing release_date and
+        run_date columns
+    release_date : date
+        The date on which this will be released to the website.
+    run_date : date
+        The date on which the model run happened.
 
     Returns
     -------
     pl.LazyFrame
-        Updated production index with either modified production date for existing
-        production week or new row added
+        Updated production index with either modified run date for existing
+        release date or new row added
 
     Notes
     -----
     Taking in the current state of the production index, update it with a run.
-    If the production_week is already in the index, update the production_date for that
+    If the release_date is already in the index, update the run_date for that
     row. If not, add a new row.
     """
     # Create the new row
-    new_row = pl.LazyFrame(
-        dict(production_week=[production_week], production_date=[production_date])
-    )
+    new_row = pl.LazyFrame(dict(release_date=[release_date], run_date=[run_date]))
 
     # Perform the update. Using `how="full"`, if this production week is already in the
     # index then it will be update "in place", otherwise a new row will be added.
-    # Sort by production_week to ensure that the output is in the same order as the
+    # Sort by release_date to ensure that the output is in the same order as the
     # input. Local testing has shown that sorting is sometimes necessary to keep the
     # order correct.
-    return production_index.update(
-        other=new_row, on="production_week", how="full"
-    ).sort("production_week")
+    return production_index.update(other=new_row, on="release_date", how="full").sort(
+        "release_date"
+    )
 
 
 def round_up_to_friday(d: date) -> date:

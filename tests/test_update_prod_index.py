@@ -11,16 +11,16 @@ def test_schema_and_types():
     # Define the schema and lazy frame
     schema = pl.Schema(
         [
-            ("production_week", pl.Date),
-            ("production_date", pl.Date),
+            ("release_date", pl.Date),
+            ("run_date", pl.Date),
         ]
     )
     lf = pl.LazyFrame(schema=schema)
 
     output_lf: pl.LazyFrame = update_production_index(
         production_index=lf,
-        production_week=date(2025, 1, 31),
-        production_date=date(2025, 1, 29),
+        release_date=date(2025, 1, 31),
+        run_date=date(2025, 1, 29),
     )
 
     # This will raise an error if the type checking fails
@@ -36,12 +36,12 @@ def test_schema_and_types():
 
 @pytest.fixture
 def production_index() -> pl.LazyFrame:
-    # Use production_week of the last week in January 2025
+    # Use release_date of the last week in January 2025
     prod_weeks = [date(2025, 1, 31)]
-    # Use production_date of the last Wednesday in January 2025
+    # Use run_date of the last Wednesday in January 2025
     prod_dates = [date(2025, 1, 29)]
 
-    lf = pl.LazyFrame(dict(production_week=prod_weeks, production_date=prod_dates))
+    lf = pl.LazyFrame(dict(release_date=prod_weeks, run_date=prod_dates))
     return lf
 
 
@@ -52,9 +52,7 @@ params = [
         date(2025, 1, 31),
         date(2025, 1, 30),
         pl.DataFrame(
-            dict(
-                production_week=[date(2025, 1, 31)], production_date=[date(2025, 1, 30)]
-            )
+            dict(release_date=[date(2025, 1, 31)], run_date=[date(2025, 1, 30)])
         ),
     ),
     # Test updating from a Wednesdsay run to a Friday run
@@ -63,9 +61,7 @@ params = [
         date(2025, 1, 31),
         date(2025, 1, 31),
         pl.DataFrame(
-            dict(
-                production_week=[date(2025, 1, 31)], production_date=[date(2025, 1, 31)]
-            )
+            dict(release_date=[date(2025, 1, 31)], run_date=[date(2025, 1, 31)])
         ),
     ),
     # Test adding a new week
@@ -75,8 +71,8 @@ params = [
         date(2025, 2, 5),
         pl.DataFrame(
             dict(
-                production_week=[date(2025, 1, 31), date(2025, 2, 7)],
-                production_date=[date(2025, 1, 29), date(2025, 2, 5)],
+                release_date=[date(2025, 1, 31), date(2025, 2, 7)],
+                run_date=[date(2025, 1, 29), date(2025, 2, 5)],
             )
         ),
     ),

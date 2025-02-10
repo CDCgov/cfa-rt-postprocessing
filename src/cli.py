@@ -4,7 +4,7 @@ import typer
 from rich.console import Console
 from typing_extensions import Annotated
 
-from cfa_rt_postprocessing.main_functions import merge_and_render_anomaly
+from src.cfa_rt_postprocessing.main_functions import merge_and_render_anomaly
 
 console = Console()
 
@@ -81,7 +81,7 @@ def main(
     # Warn the user that they are doing a production run
     if is_prod_run:
         console.log(
-            "This is a production run. The production_index.csv file will be updated."
+            "This is a production run. A new production_index file will be added."
         )
 
     merge_and_render_anomaly(
