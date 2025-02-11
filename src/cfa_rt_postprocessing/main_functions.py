@@ -8,9 +8,12 @@ import duckdb
 import polars as pl
 import quarto
 from azure.identity import DefaultAzureCredential
-from azure.storage.blob import BlobServiceClient
-from azure.storage.blob._container_client import ContainerClient
-from azure.storage.blob._models import BlobProperties
+from azure.storage.blob import (
+    BlobProperties,
+    BlobServiceClient,
+    ContainerClient,
+    ContentSettings,
+)
 from rich.console import Console
 from rich.progress import track
 
@@ -54,6 +57,11 @@ def validate_args(args):
     )
     overwrite_blobs = args.get("overwrite_blobs", False)
 
+    # If this is a prod run, make sure overwite_blobs is True, otherwise error out
+    is_prod_run = args.get("is_prod_run", False)
+    if (overwrite_blobs is False) and is_prod_run:
+        raise ValueError("overwrite_blobs must be True for a production run")
+
     return {
         "release_name": args.get("release_name"),
         "min_runat": min_runat,
@@ -61,6 +69,7 @@ def validate_args(args):
         "rt_output_container_name": rt_output_container_name,
         "post_process_container_name": post_process_container_name,
         "overwrite_blobs": overwrite_blobs,
+        "is_prod_run": is_prod_run,
     }
 
 
@@ -512,6 +521,9 @@ def merge_and_render_anomaly(
                     name=f"production_index/{now}.csv",
                     data=data,
                     overwrite=False,
+                    # Small QOL improvement: set the content type to CSV so that various
+                    # services know how to handle it
+                    content_settings=ContentSettings(content_type="text/csv"),
                 )
             console.log(
                 f"Uploaded the production index to {output_ctr_client.url}/production_index/{now}.csv"

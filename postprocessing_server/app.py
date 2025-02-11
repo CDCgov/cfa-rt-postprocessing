@@ -1,6 +1,9 @@
 from flask import Flask, Response, request
 
-from cfa_rt_postprocessing.main_functions import merge_and_render_anomaly, validate_args
+from src.cfa_rt_postprocessing.main_functions import (
+    merge_and_render_anomaly,
+    validate_args,
+)
 
 app = Flask(__name__)
 
