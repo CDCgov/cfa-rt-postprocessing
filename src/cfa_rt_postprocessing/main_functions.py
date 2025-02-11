@@ -1,4 +1,6 @@
-from datetime import date, datetime, timezone
+import warnings
+from datetime import date, datetime, timedelta, timezone
+from io import BytesIO
 from pathlib import Path
 from shutil import rmtree
 
@@ -6,11 +8,16 @@ import duckdb
 import polars as pl
 import quarto
 from azure.identity import DefaultAzureCredential
-from azure.storage.blob import BlobServiceClient
-from azure.storage.blob._container_client import ContainerClient
-from azure_constants import AzureStorage
+from azure.storage.blob import (
+    BlobProperties,
+    BlobServiceClient,
+    ContainerClient,
+    ContentSettings,
+)
 from rich.console import Console
 from rich.progress import track
+
+from src.cfa_rt_postprocessing.azure_constants import AzureStorage
 
 console = Console()
 
@@ -50,6 +57,11 @@ def validate_args(args):
     )
     overwrite_blobs = args.get("overwrite_blobs", False)
 
+    # If this is a prod run, make sure overwite_blobs is True, otherwise error out
+    is_prod_run = args.get("is_prod_run", False)
+    if (overwrite_blobs is False) and is_prod_run:
+        raise ValueError("overwrite_blobs must be True for a production run")
+
     return {
         "release_name": args.get("release_name"),
         "min_runat": min_runat,
@@ -57,6 +69,7 @@ def validate_args(args):
         "rt_output_container_name": rt_output_container_name,
         "post_process_container_name": post_process_container_name,
         "overwrite_blobs": overwrite_blobs,
+        "is_prod_run": is_prod_run,
     }
 
 
@@ -68,6 +81,7 @@ def merge_and_render_anomaly(
     rt_output_container_name: str = "nssp_rt",
     post_process_container_name: str = "nssp-rt-post-process",
     overwrite_blobs: bool = False,
+    is_prod_run: bool = False,
 ):
     """
     Merge multiple task sample and summary files within a specified time range.
@@ -151,6 +165,7 @@ def merge_and_render_anomaly(
         and (b.creation_time >= min_runat)
         and (b.creation_time <= max_runat)
     ]
+    console.status(f"Found {len(metadata_files)} metadata files")
     # Download the metadata files into the internal-review folder
     for mf in track(metadata_files, description="Downloading metadata files"):
         to_write = meta / mf
@@ -439,6 +454,83 @@ def merge_and_render_anomaly(
     except Exception as e:
         console.log(f"Failed to upload the p_growing files: {e}")
 
+    # === Update the production index ==================================================
+    if is_prod_run:
+        # Get the production index blobs
+        prod_idx_blobs: list[BlobProperties] = [
+            b
+            for b in output_ctr_client.list_blobs()
+            if b.name.startswith("production_index") and b.name.endswith(".csv")
+        ]
+        console.log(f"Found {len(prod_idx_blobs)} production index files")
+        # Find the most recent one
+        most_recent_prod_idx: BlobProperties = max(
+            prod_idx_blobs, key=lambda x: x.creation_time
+        )
+        console.log(f"Using most recent production index: {most_recent_prod_idx.name}")
+
+        # Download the production index
+        csv_bytes_io = BytesIO(
+            output_ctr_client.download_blob(most_recent_prod_idx.name).readall()
+        )
+        production_index = pl.read_csv(
+            csv_bytes_io,
+            schema=pl.Schema(
+                [
+                    ("release_date", pl.Date),
+                    ("run_date", pl.Date),
+                ]
+            ),
+        ).lazy()
+
+        # Get the release date
+        release_date: date = round_up_to_friday(date.today())
+
+        # Get this from the metadata. There should only be one unique run_at date
+        # from all of these tasks
+        run_dates: list[date] = (
+            prod_runs.get_column("run_at").dt.date().unique().to_list()
+        )
+        if len(run_dates) != 1:
+            # Warn the user that there was more than one run date. Note that in the
+            # metadata from the model, `production_date` is what we are calling `run_date`
+            # in the production index.
+            warnings.warn(
+                f"More than one unique run date found: {run_dates}. Using the first one."
+            )
+
+        run_date: date = run_dates[0]
+
+        # Update it
+        new_production_index: pl.DataFrame = update_production_index(
+            production_index=production_index,
+            release_date=release_date,
+            run_date=run_date,
+        ).collect()
+
+        # Write it to CSV, using timestamp up to the current second as the name
+        now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        new_prod_idx_file = internal_review / "production_index" / f"{now}.csv"
+        new_prod_idx_file.parent.mkdir(parents=True, exist_ok=True)
+        new_production_index.write_csv(new_prod_idx_file)
+
+        # Upload it
+        try:
+            with new_prod_idx_file.open("rb") as data:
+                output_ctr_client.upload_blob(
+                    name=f"production_index/{now}.csv",
+                    data=data,
+                    overwrite=False,
+                    # Small QOL improvement: set the content type to CSV so that various
+                    # services know how to handle it
+                    content_settings=ContentSettings(content_type="text/csv"),
+                )
+            console.log(
+                f"Uploaded the production index to {output_ctr_client.url}/production_index/{now}.csv"
+            )
+        except Exception as e:
+            console.log(f"Failed to upload the production index: {e}")
+
     # === Clean up =====================================================================
     conn.close()
     console.log(f"Cleaning up {root} folder")
@@ -451,7 +543,7 @@ def render_report(
     summary_loc: Path,
     samples_loc: Path,
     metadata_file: Path,
-    unrendered_location: Path = Path("cfa_rt_postprocessing/anomaly_report.qmd"),
+    unrendered_location: Path = Path("src/cfa_rt_postprocessing/anomaly_report.qmd"),
 ):
     quarto.render(
         input=unrendered_location,
@@ -518,6 +610,65 @@ def calculate_categories(samples_file: Path) -> pl.DataFrame:
     conn.close()
 
     return p_growing
+
+
+def update_production_index(
+    production_index: pl.LazyFrame, release_date: date, run_date: date
+) -> pl.LazyFrame:
+    """
+    Update or add a row in the production index.
+
+    Parameters
+    ----------
+    production_index : pl.LazyFrame
+        The current production index LazyFrame containing release_date and
+        run_date columns
+    release_date : date
+        The date on which this will be released to the website.
+    run_date : date
+        The date on which the model run happened.
+
+    Returns
+    -------
+    pl.LazyFrame
+        Updated production index with either modified run date for existing
+        release date or new row added
+
+    Notes
+    -----
+    Taking in the current state of the production index, update it with a run.
+    If the release_date is already in the index, update the run_date for that
+    row. If not, add a new row.
+    """
+    # Create the new row
+    new_row = pl.LazyFrame(dict(release_date=[release_date], run_date=[run_date]))
+
+    # Perform the update. Using `how="full"`, if this production week is already in the
+    # index then it will be update "in place", otherwise a new row will be added.
+    # Sort by release_date to ensure that the output is in the same order as the
+    # input. Local testing has shown that sorting is sometimes necessary to keep the
+    # order correct.
+    return production_index.update(other=new_row, on="release_date", how="full").sort(
+        "release_date"
+    )
+
+
+def round_up_to_friday(d: date) -> date:
+    """
+    Round a date up to the next Friday.
+
+    Parameters
+    ----------
+    d : date
+        The date to round up to the next Friday.
+
+    Returns
+    -------
+    date
+        The next Friday after the input date.
+    """
+
+    return d + timedelta(days=(4 - d.weekday()) % 7)
 
 
 if __name__ == "__main__":

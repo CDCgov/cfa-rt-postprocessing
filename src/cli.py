@@ -1,8 +1,12 @@
 from datetime import datetime, timezone
 
 import typer
-from main_functions import merge_and_render_anomaly
+from rich.console import Console
 from typing_extensions import Annotated
+
+from src.cfa_rt_postprocessing.main_functions import merge_and_render_anomaly
+
+console = Console()
 
 
 def main(
@@ -47,6 +51,15 @@ def main(
         typer.Option(
             help="Whether to overwrite the blobs in the post process container",
         ),
+    ] = True,
+    is_prod_run: Annotated[
+        bool,
+        typer.Option(
+            help=(
+                "Whether this is a production run or not. If it is a production run, the "
+                "production_index.csv file will be updated."
+            ),
+        ),
     ] = False,
 ):
     # Add UTC timezone to min_runat and max_runat. Typer cannot add timezone info to
@@ -59,6 +72,18 @@ def main(
     if prod_date is not None:
         prod_date = prod_date.date()  # type: ignore
 
+    # If this is a prod_run, make sure that overwrite_blobs is set to True
+    if is_prod_run and not overwrite_blobs:
+        raise typer.BadParameter(
+            "If this is a production run, the --overwrite-blobs flag must be set to True"
+        )
+
+    # Warn the user that they are doing a production run
+    if is_prod_run:
+        console.log(
+            "This is a production run. A new production_index file will be added."
+        )
+
     merge_and_render_anomaly(
         release_name=release_name,
         min_runat=min_runat,
@@ -67,6 +92,7 @@ def main(
         rt_output_container_name=rt_output_container_name,
         post_process_container_name=post_process_container_name,
         overwrite_blobs=overwrite_blobs,
+        is_prod_run=is_prod_run,
     )
 
 

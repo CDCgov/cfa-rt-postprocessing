@@ -113,6 +113,9 @@ flowchart TD
   d --> |release to| dcp((DCIPHER state explorer));
 ```
 
+### Running
+To run locally, run `uv run -m src.cli --help` to get the help message explaining how to run it. Note that running this without the `-m src.cli` will result in package paths being read from the wrong relative location, meaning that imports don't work.
+
 ## Project Admin
 
 Katie Gostic, uep6@cdc.gov, CDC/IOD/ORR/CFA
