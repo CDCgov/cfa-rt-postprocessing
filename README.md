@@ -1,6 +1,6 @@
 # CFA $R_t$ postprocesing
 
-⚠️ This is a work in progress
+⚠️ This repo has been moved to an [internal repo](https://github.com/cdcent/substate-rt-postprocessing/).
 
 ## Overview
 
